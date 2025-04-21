@@ -16,7 +16,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from email_handler import send_email_report
 
-# Initialize Flask app - this allows it to be imported by wsgi.py
+# Initialize Flask app
 app = Flask(__name__)
 CORS(app)
 app.secret_key = os.environ.get('SECRET_KEY', 'your_temporary_secret_key')
@@ -26,8 +26,9 @@ logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Initialize limiter with proper storage
+# Fix for the key_func argument error
 limiter = Limiter(
-    app,
+    app=app,
     key_func=get_remote_address,
     default_limits=["200 per day", "50 per hour"],
     storage_uri="memory://"  # Use memory storage for now
@@ -670,6 +671,8 @@ def process_scan_request(lead_data):
         # Save lead data
         try:
             save_lead_data(lead_data)
+            logging.debug("Lead data saved successfully")
+        except Exception as e:
             logging.debug("Lead data saved successfully")
         except Exception as e:
             logging.error(f"Error saving lead data: {e}")
