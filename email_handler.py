@@ -24,6 +24,11 @@ def send_email_report(lead_data, scan_result):
         smtp_user = os.environ.get('SMTP_USER')
         smtp_password = os.environ.get('SMTP_PASSWORD')
         
+        # Check if credentials are available
+        if not smtp_user or not smtp_password:
+            logging.error("SMTP credentials not found in environment variables")
+            return False
+            
         logging.debug(f"Attempting to send email with SMTP user: {smtp_user}")
         
         msg = EmailMessage()
