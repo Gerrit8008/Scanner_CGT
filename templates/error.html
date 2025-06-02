@@ -37,7 +37,7 @@
             <!-- Check if current_user exists and is defined before using it -->
             {% if current_user is defined and current_user.is_authenticated %}
                 {% if current_user.role == 'admin' %}
-                <a href="{{ url_for('auth.admin_dashboard') }}" class="btn btn-primary mt-4">Return to Dashboard</a>
+                <a href="{{ url_for('admin.admin_dashboard') }}" class="btn btn-primary mt-4">Return to Dashboard</a>
                 {% else %}
                 <a href="{{ url_for('client.dashboard') }}" class="btn btn-primary mt-4">Return to Dashboard</a>
                 {% endif %}
