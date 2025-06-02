@@ -891,74 +891,78 @@ def update_scanner_config(conn, cursor, scanner_id, scanner_data, user_id):
         return {"status": "error", "message": str(e)}
 
 @with_transaction
-
-def get_dashboard_summary(cursor=None):
-    """Get summary statistics for the admin dashboard."""
-    try:
-        # Use provided cursor or create a new connection
-        conn = None
-        if cursor is None:
-            conn = get_db_connection()
-            cursor = conn.cursor()
+def get_dashboard_summary(conn, cursor=None):
+    """
+    Get dashboard summary statistics
+    
+    Args:
+        conn: Database connection (provided by with_transaction)
+        cursor: Database cursor (provided by with_transaction)
         
+    Returns:
+        dict: Dashboard summary statistics
+    """
+    try:
         # Get total clients count
         cursor.execute("SELECT COUNT(*) FROM clients")
         total_clients = cursor.fetchone()[0]
         
-        # Get active scanners count (try/except in case table doesn't exist)
+        # Get active clients count
+        cursor.execute("SELECT COUNT(*) FROM clients WHERE active = 1")
+        active_clients = cursor.fetchone()[0]
+        
+        # Get inactive clients count
+        cursor.execute("SELECT COUNT(*) FROM clients WHERE active = 0")
+        inactive_clients = cursor.fetchone()[0]
+        
+        # Get total scan count
         try:
-            cursor.execute("SELECT COUNT(*) FROM deployed_scanners WHERE deploy_status = 'deployed'")
-            deployed_scanners = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM scans")
+            total_scans = cursor.fetchone()[0]
         except:
-            deployed_scanners = 0
+            # Table might not exist
+            total_scans = 0
         
-        # Count scan history (active scans)
+        # Get today's scan count
+        import datetime
+        today = datetime.date.today().isoformat()
         try:
-            cursor.execute("SELECT COUNT(*) FROM scan_history")
-            active_scans = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM scans WHERE DATE(timestamp) = ?", (today,))
+            scans_today = cursor.fetchone()[0]
         except:
-            active_scans = 0
+            scans_today = 0
         
-        # Calculate monthly revenue (based on subscriptions)
+        # Get total users count
+        cursor.execute("SELECT COUNT(*) FROM users")
+        total_users = cursor.fetchone()[0]
+        
+        # Get subscription distribution
         try:
-            cursor.execute("SELECT COUNT(*), subscription_level FROM clients WHERE active = 1 GROUP BY subscription_level")
-            subscription_counts = cursor.fetchall()
-            
-            # Define subscription prices
-            subscription_prices = {'basic': 49, 'pro': 149, 'enterprise': 499}
-            monthly_revenue = 0
-            
-            for count, level in subscription_counts:
-                level = level.lower() if level else 'basic'
-                price = subscription_prices.get(level, 0)
-                monthly_revenue += count * price
+            cursor.execute("""
+                SELECT subscription_level as subscription, COUNT(*) as count
+                FROM clients
+                GROUP BY subscription_level
+            """)
+            subscription_distribution = {}
+            for row in cursor.fetchall():
+                subscription_distribution[row[0]] = row[1]
         except:
-            monthly_revenue = 0
+            subscription_distribution = {"basic": 0, "pro": 0, "enterprise": 0}
         
-        # Close connection if we created it
-        if conn:
-            conn.close()
-        
-        # Return the summary
+        # Return summary data
         return {
             'total_clients': total_clients,
-            'deployed_scanners': deployed_scanners,
-            'active_scans': active_scans,
-            'monthly_revenue': monthly_revenue
+            'active_clients': active_clients,
+            'inactive_clients': inactive_clients,
+            'total_scans': total_scans,
+            'scans_today': scans_today,
+            'total_users': total_users,
+            'subscription_distribution': subscription_distribution,
+            'deployed_scanners': active_clients  # Use active_clients as a proxy
         }
     except Exception as e:
-        import traceback
-        print(f"Error in get_dashboard_summary: {e}")
-        print(traceback.format_exc())
-        
-        # Return empty summary on error
-        return {
-            'total_clients': 0,
-            'deployed_scanners': 0,
-            'active_scans': 0,
-            'monthly_revenue': 0
-        }
-# default data on error
+        logging.error(f"Error in get_dashboard_summary: {e}")
+        # Return default data on error
         return {
             'total_clients': 0,
             'active_clients': 0,
@@ -1033,163 +1037,168 @@ def deactivate_client(conn, cursor, client_id, user_id=None):
         raise  # Re-raise to let transaction wrapper handle it
 
 @with_transaction
-
 def get_dashboard_summary(cursor=None):
-    """Get summary statistics for the admin dashboard."""
-    try:
-        # Use provided cursor or create a new connection
-        conn = None
-        if cursor is None:
-            conn = get_db_connection()
-            cursor = conn.cursor()
+    """
+    Get dashboard summary statistics
+    
+    Args:
+        cursor (sqlite3.Cursor, optional): Database cursor. If None, a new connection is created.
         
+    Returns:
+        dict: Dashboard summary statistics
+    """
+    # Create connection and cursor if not provided
+    conn = None
+    close_conn = False
+    if cursor is None:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        close_conn = True
+    
+    try:
         # Get total clients count
         cursor.execute("SELECT COUNT(*) FROM clients")
         total_clients = cursor.fetchone()[0]
         
-        # Get active scanners count (try/except in case table doesn't exist)
-        try:
-            cursor.execute("SELECT COUNT(*) FROM deployed_scanners WHERE deploy_status = 'deployed'")
-            deployed_scanners = cursor.fetchone()[0]
-        except:
-            deployed_scanners = 0
+        # Get active clients count
+        cursor.execute("SELECT COUNT(*) FROM clients WHERE active = 1")
+        active_clients = cursor.fetchone()[0]
         
-        # Count scan history (active scans)
-        try:
-            cursor.execute("SELECT COUNT(*) FROM scan_history")
-            active_scans = cursor.fetchone()[0]
-        except:
-            active_scans = 0
+        # Get inactive clients count
+        cursor.execute("SELECT COUNT(*) FROM clients WHERE active = 0")
+        inactive_clients = cursor.fetchone()[0]
         
-        # Calculate monthly revenue (based on subscriptions)
-        try:
-            cursor.execute("SELECT COUNT(*), subscription_level FROM clients WHERE active = 1 GROUP BY subscription_level")
-            subscription_counts = cursor.fetchall()
-            
-            # Define subscription prices
-            subscription_prices = {'basic': 49, 'pro': 149, 'enterprise': 499}
-            monthly_revenue = 0
-            
-            for count, level in subscription_counts:
-                level = level.lower() if level else 'basic'
-                price = subscription_prices.get(level, 0)
-                monthly_revenue += count * price
-        except:
-            monthly_revenue = 0
+        # Get total scan count
+        cursor.execute("SELECT COUNT(*) FROM scans")
+        total_scans = cursor.fetchone()[0]
         
-        # Close connection if we created it
-        if conn:
-            conn.close()
+        # Get today's scan count
+        import datetime
+        today = datetime.date.today().isoformat()
+        cursor.execute("SELECT COUNT(*) FROM scans WHERE DATE(scan_date) = ?", (today,))
+        scans_today = cursor.fetchone()[0]
         
-        # Return the summary
+        # Get total users count
+        cursor.execute("SELECT COUNT(*) FROM users")
+        total_users = cursor.fetchone()[0]
+        
+        # Get client distribution by subscription
+        cursor.execute("""
+            SELECT subscription, COUNT(*) as count
+            FROM clients
+            GROUP BY subscription
+        """)
+        subscription_distribution = {}
+        for row in cursor.fetchall():
+            subscription_distribution[row[0]] = row[1]
+        
+        # Return summary data
         return {
             'total_clients': total_clients,
-            'deployed_scanners': deployed_scanners,
-            'active_scans': active_scans,
-            'monthly_revenue': monthly_revenue
+            'active_clients': active_clients,
+            'inactive_clients': inactive_clients,
+            'total_scans': total_scans,
+            'scans_today': scans_today,
+            'total_users': total_users,
+            'subscription_distribution': subscription_distribution
         }
-    except Exception as e:
-        import traceback
-        print(f"Error in get_dashboard_summary: {e}")
-        print(traceback.format_exc())
+    finally:
+        # Close connection if we opened it
+        if close_conn and conn:
+            conn.close()
+            
+@with_transaction
+def list_clients(page=1, per_page=10, filters=None, sort_by=None, sort_dir='asc'):
+    """
+    List clients with pagination and filtering
+    
+    Args:
+        page (int): Page number
+        per_page (int): Items per page
+        filters (dict, optional): Filter conditions
+        sort_by (str, optional): Column to sort by
+        sort_dir (str, optional): Sort direction ('asc' or 'desc')
         
-        # Return empty summary on error
-        return {
-            'total_clients': 0,
-            'deployed_scanners': 0,
-            'active_scans': 0,
-            'monthly_revenue': 0
-        }
-
-def list_clients(cursor=None, page=1, per_page=10, filters=None):
-    """List clients with pagination and filtering."""
-    try:
-        # Use provided cursor or create a new connection
-        conn = None
-        if cursor is None:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-        
-        # Default filters
-        if filters is None:
-            filters = {}
-        
-        # Build query
-        query = "SELECT * FROM clients"
-        params = []
-        
-        # Apply filters
-        where_clauses = []
-        
-        if 'search' in filters and filters['search']:
-            where_clauses.append("(business_name LIKE ? OR business_domain LIKE ? OR contact_email LIKE ?)")
-            search_term = f"%{filters['search']}%"
-            params.extend([search_term, search_term, search_term])
-        
+    Returns:
+        dict: Dictionary with clients and pagination info
+    """
+    conn = get_db_connection()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # Base query
+    query = "SELECT * FROM clients"
+    count_query = "SELECT COUNT(*) FROM clients"
+    
+    # Add filter conditions if provided
+    params = []
+    where_clauses = []
+    
+    if filters:
         if 'subscription' in filters and filters['subscription']:
-            where_clauses.append("subscription_level = ?")
+            where_clauses.append("subscription = ?")
             params.append(filters['subscription'])
         
-        if 'active' in filters:
+        if 'status' in filters and filters['status']:
+            active = 1 if filters['status'].lower() == 'active' else 0
             where_clauses.append("active = ?")
-            params.append(1 if filters['active'] else 0)
+            params.append(active)
         
-        # Add WHERE clause if needed
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
-        
-        # Count total matching clients
-        count_query = f"SELECT COUNT(*) FROM ({query})"
-        cursor.execute(count_query, params)
-        total_count = cursor.fetchone()[0]
-        
-        # Add pagination
-        query += " ORDER BY id DESC LIMIT ? OFFSET ?"
-        params.extend([per_page, (page - 1) * per_page])
-        
-        # Execute query
-        cursor.execute(query, params)
-        
-        # Convert to list of dictionaries
-        clients = []
-        for row in cursor.fetchall():
-            client = {}
-            for idx, col in enumerate(cursor.description):
-                client[col[0]] = row[idx]
-            clients.append(client)
-        
-        # Calculate pagination info
-        total_pages = (total_count + per_page - 1) // per_page if per_page > 0 else 1
-        
-        # Close connection if we created it
-        if conn:
-            conn.close()
-        
-        # Return clients and pagination info
-        return {
-            'clients': clients,
-            'pagination': {
-                'page': page,
-                'per_page': per_page,
-                'total_count': total_count,
-                'total_pages': total_pages
-            }
-        }
-    except Exception as e:
-        import traceback
-        print(f"Error in list_clients: {e}")
-        print(traceback.format_exc())
-        
-        # Return empty list on error
-        return {
-            'clients': [],
-            'pagination': {
-                'page': 1,
-                'per_page': per_page,
-                'total_count': 0,
-                'total_pages': 1
-            }
-        }
+        if 'search' in filters and filters['search']:
+            search_term = f"%{filters['search']}%"
+            where_clauses.append("(business_name LIKE ? OR business_domain LIKE ? OR contact_email LIKE ?)")
+            params.extend([search_term, search_term, search_term])
+    
+    # Add WHERE clause if there are filter conditions
+    if where_clauses:
+        query += " WHERE " + " AND ".join(where_clauses)
+        count_query += " WHERE " + " AND ".join(where_clauses)
+    
+    # Add sorting
+    if sort_by:
+        valid_columns = ['id', 'business_name', 'business_domain', 'created_at', 'subscription']
+        if sort_by in valid_columns:
+            sort_direction = "DESC" if sort_dir.lower() == 'desc' else "ASC"
+            query += f" ORDER BY {sort_by} {sort_direction}"
+        else:
+            # Default sorting
+            query += " ORDER BY id DESC"
+    else:
+        # Default sorting
+        query += " ORDER BY id DESC"
+    
+    # Get total count for pagination
+    cursor.execute(count_query, params)
+    total_count = cursor.fetchone()[0]
+    
+    # Add pagination
+    offset = (page - 1) * per_page
+    query += " LIMIT ? OFFSET ?"
+    params.extend([per_page, offset])
+    
+    # Execute final query
+    cursor.execute(query, params)
+    clients = [dict(row) for row in cursor.fetchall()]
+    
+    # Calculate pagination info
+    total_pages = (total_count + per_page - 1) // per_page  # Ceiling division
+    
+    # Build pagination object
+    pagination = {
+        'page': page,
+        'per_page': per_page,
+        'total_count': total_count,
+        'total_pages': total_pages
+    }
+    
+    conn.close()
+    
+    return {
+        'clients': clients,
+        'pagination': pagination
+    }
+    
+@with_transaction
 def get_client_by_id(conn, client_id):
     """Get client details by ID"""
     cursor = conn.cursor()
@@ -3808,73 +3817,122 @@ def get_user_permissions(conn, cursor, role):
     return permissions
 
 @with_transaction
-
-def get_dashboard_summary(cursor=None):
-    """Get summary statistics for the admin dashboard."""
+def get_dashboard_summary(conn, cursor):
+    """Get summary statistics for admin dashboard"""
+    summary = {
+        'clients': {
+            'total': 0,
+            'active': 0,
+            'inactive': 0,
+            'pending': 0,
+            'new_this_month': 0
+        },
+        'subscriptions': {
+            'basic': 0,
+            'pro': 0,
+            'enterprise': 0
+        },
+        'scans': {
+            'total': 0,
+            'this_month': 0,
+            'yesterday': 0,
+            'today': 0
+        },
+        'revenue': {
+            'monthly': 0,
+            'yearly': 0,
+            'total': 0
+        }
+    }
+    
+    # Get total client count
+    cursor.execute('SELECT COUNT(*) FROM clients')
+    summary['clients']['total'] = cursor.fetchone()[0]
+    
+    # Get active client count
+    cursor.execute('SELECT COUNT(*) FROM clients WHERE active = 1')
+    summary['clients']['active'] = cursor.fetchone()[0]
+    
+    # Get inactive client count
+    cursor.execute('SELECT COUNT(*) FROM clients WHERE active = 0')
+    summary['clients']['inactive'] = cursor.fetchone()[0]
+    
+    # Get pending client count
+    cursor.execute('''
+    SELECT COUNT(*) FROM clients c
+    JOIN deployed_scanners ds ON c.id = ds.client_id
+    WHERE ds.deploy_status = 'pending' AND c.active = 1
+    ''')
+    summary['clients']['pending'] = cursor.fetchone()[0]
+    
+    # Get new clients this month
+    current_month = datetime.now().strftime('%Y-%m')
+    cursor.execute('''
+    SELECT COUNT(*) FROM clients 
+    WHERE created_at LIKE ? AND active = 1
+    ''', (f'{current_month}%',))
+    summary['clients']['new_this_month'] = cursor.fetchone()[0]
+    
+    # Get subscription counts
+    subscription_levels = ['basic', 'pro', 'enterprise']
+    for level in subscription_levels:
+        cursor.execute('''
+        SELECT COUNT(*) FROM clients 
+        WHERE subscription_level = ? AND active = 1
+        ''', (level,))
+        summary['subscriptions'][level] = cursor.fetchone()[0]
+    
+    # Get scan counts
+    cursor.execute('SELECT COUNT(*) FROM scan_history')
+    summary['scans']['total'] = cursor.fetchone()[0]
+    
+    # Get scans this month
+    cursor.execute('''
+    SELECT COUNT(*) FROM scan_history 
+    WHERE timestamp LIKE ?
+    ''', (f'{current_month}%',))
+    summary['scans']['this_month'] = cursor.fetchone()[0]
+    
+    # Get scans yesterday
+    yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    cursor.execute('''
+    SELECT COUNT(*) FROM scan_history 
+    WHERE timestamp LIKE ?
+    ''', (f'{yesterday}%',))
+    summary['scans']['yesterday'] = cursor.fetchone()[0]
+    
+    # Get scans today
+    today = datetime.now().strftime('%Y-%m-%d')
+    cursor.execute('''
+    SELECT COUNT(*) FROM scan_history 
+    WHERE timestamp LIKE ?
+    ''', (f'{today}%',))
+    summary['scans']['today'] = cursor.fetchone()[0]
+    
+    # Get revenue info if billing is available
     try:
-        # Use provided cursor or create a new connection
-        conn = None
-        if cursor is None:
-            conn = get_db_connection()
-            cursor = conn.cursor()
+        # Monthly recurring revenue
+        cursor.execute('''
+        SELECT SUM(amount) FROM client_billing 
+        WHERE status = 'active' AND billing_cycle = 'monthly'
+        ''')
+        result = cursor.fetchone()
+        summary['revenue']['monthly'] = result[0] if result[0] is not None else 0
         
-        # Get total clients count
-        cursor.execute("SELECT COUNT(*) FROM clients")
-        total_clients = cursor.fetchone()[0]
+        # Yearly revenue (estimated)
+        summary['revenue']['yearly'] = summary['revenue']['monthly'] * 12
         
-        # Get active scanners count (try/except in case table doesn't exist)
-        try:
-            cursor.execute("SELECT COUNT(*) FROM deployed_scanners WHERE deploy_status = 'deployed'")
-            deployed_scanners = cursor.fetchone()[0]
-        except:
-            deployed_scanners = 0
-        
-        # Count scan history (active scans)
-        try:
-            cursor.execute("SELECT COUNT(*) FROM scan_history")
-            active_scans = cursor.fetchone()[0]
-        except:
-            active_scans = 0
-        
-        # Calculate monthly revenue (based on subscriptions)
-        try:
-            cursor.execute("SELECT COUNT(*), subscription_level FROM clients WHERE active = 1 GROUP BY subscription_level")
-            subscription_counts = cursor.fetchall()
-            
-            # Define subscription prices
-            subscription_prices = {'basic': 49, 'pro': 149, 'enterprise': 499}
-            monthly_revenue = 0
-            
-            for count, level in subscription_counts:
-                level = level.lower() if level else 'basic'
-                price = subscription_prices.get(level, 0)
-                monthly_revenue += count * price
-        except:
-            monthly_revenue = 0
-        
-        # Close connection if we created it
-        if conn:
-            conn.close()
-        
-        # Return the summary
-        return {
-            'total_clients': total_clients,
-            'deployed_scanners': deployed_scanners,
-            'active_scans': active_scans,
-            'monthly_revenue': monthly_revenue
-        }
-    except Exception as e:
-        import traceback
-        print(f"Error in get_dashboard_summary: {e}")
-        print(traceback.format_exc())
-        
-        # Return empty summary on error
-        return {
-            'total_clients': 0,
-            'deployed_scanners': 0,
-            'active_scans': 0,
-            'monthly_revenue': 0
-        }
+        # Total revenue (all time)
+        cursor.execute('SELECT SUM(amount) FROM billing_transactions WHERE status = "completed"')
+        result = cursor.fetchone()
+        summary['revenue']['total'] = result[0] if result[0] is not None else 0
+    except:
+        # Table might not exist yet
+        pass
+    
+    return summary
+
+@with_transaction
 def get_client_by_id(conn, cursor, client_id):
     """Get client details by ID"""
     cursor.execute('''
@@ -4413,96 +4471,74 @@ def regenerate_api_key(conn, cursor, client_id):
     return {"status": "success", "api_key": new_api_key}
 
 @with_transaction
-
-def list_clients(cursor=None, page=1, per_page=10, filters=None):
-    """List clients with pagination and filtering."""
-    try:
-        # Use provided cursor or create a new connection
-        conn = None
-        if cursor is None:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-        
-        # Default filters
-        if filters is None:
-            filters = {}
-        
-        # Build query
-        query = "SELECT * FROM clients"
-        params = []
-        
-        # Apply filters
-        where_clauses = []
-        
-        if 'search' in filters and filters['search']:
-            where_clauses.append("(business_name LIKE ? OR business_domain LIKE ? OR contact_email LIKE ?)")
-            search_term = f"%{filters['search']}%"
-            params.extend([search_term, search_term, search_term])
-        
+def list_clients(conn, cursor, page=1, per_page=10, filters=None):
+    """List clients with pagination and filtering options"""
+    offset = (page - 1) * per_page
+    
+    # Start with base query
+    query = '''
+    SELECT c.id, c.business_name, c.business_domain, c.contact_email, 
+           c.subscription_level, c.subscription_status, c.created_at, c.active,
+           ds.subdomain
+    FROM clients c
+    LEFT JOIN deployed_scanners ds ON c.id = ds.client_id
+    '''
+    
+    # Add filter conditions if provided
+    params = []
+    where_clauses = []
+    
+    if filters:
         if 'subscription' in filters and filters['subscription']:
-            where_clauses.append("subscription_level = ?")
+            where_clauses.append('c.subscription_level = ?')
             params.append(filters['subscription'])
         
-        if 'active' in filters:
-            where_clauses.append("active = ?")
-            params.append(1 if filters['active'] else 0)
+        if 'status' in filters and filters['status']:
+            if filters['status'] == 'active':
+                where_clauses.append('c.active = 1')
+            elif filters['status'] == 'inactive':
+                where_clauses.append('c.active = 0')
         
-        # Add WHERE clause if needed
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
-        
-        # Count total matching clients
-        count_query = f"SELECT COUNT(*) FROM ({query})"
-        cursor.execute(count_query, params)
-        total_count = cursor.fetchone()[0]
-        
-        # Add pagination
-        query += " ORDER BY id DESC LIMIT ? OFFSET ?"
-        params.extend([per_page, (page - 1) * per_page])
-        
-        # Execute query
-        cursor.execute(query, params)
-        
-        # Convert to list of dictionaries
-        clients = []
-        for row in cursor.fetchall():
-            client = {}
-            for idx, col in enumerate(cursor.description):
-                client[col[0]] = row[idx]
-            clients.append(client)
-        
-        # Calculate pagination info
-        total_pages = (total_count + per_page - 1) // per_page if per_page > 0 else 1
-        
-        # Close connection if we created it
-        if conn:
-            conn.close()
-        
-        # Return clients and pagination info
-        return {
-            'clients': clients,
-            'pagination': {
-                'page': page,
-                'per_page': per_page,
-                'total_count': total_count,
-                'total_pages': total_pages
-            }
+        if 'search' in filters and filters['search']:
+            search_term = f"%{filters['search']}%"
+            where_clauses.append('(c.business_name LIKE ? OR c.business_domain LIKE ? OR c.contact_email LIKE ?)')
+            params.extend([search_term, search_term, search_term])
+    
+    # Construct WHERE clause if needed
+    if where_clauses:
+        query += ' WHERE ' + ' AND '.join(where_clauses)
+    
+    # Add order by and pagination
+    query += ' ORDER BY c.id DESC LIMIT ? OFFSET ?'
+    params.extend([per_page, offset])
+    
+    # Execute query
+    cursor.execute(query, params)
+    clients = [dict(row) for row in cursor.fetchall()]
+    
+    # Count total records for pagination
+    count_query = 'SELECT COUNT(*) FROM clients c'
+    if where_clauses:
+        count_query += ' WHERE ' + ' AND '.join(where_clauses)
+    
+    # Remove pagination params and execute count query
+    cursor.execute(count_query, params[:-2] if params else [])
+    total_count = cursor.fetchone()[0]
+    
+    # Calculate pagination info
+    total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
+    
+    return {
+        "status": "success",
+        "clients": clients,
+        "pagination": {
+            "page": page,
+            "per_page": per_page,
+            "total_pages": total_pages,
+            "total_count": total_count
         }
-    except Exception as e:
-        import traceback
-        print(f"Error in list_clients: {e}")
-        print(traceback.format_exc())
-        
-        # Return empty list on error
-        return {
-            'clients': [],
-            'pagination': {
-                'page': 1,
-                'per_page': per_page,
-                'total_count': 0,
-                'total_pages': 1
-            }
-        }
+    }
+
 def get_scan_reports_for_client(client_id, page=1, per_page=25, filters=None):
     """Get detailed scan reports for a client with pagination and filtering"""
     try:

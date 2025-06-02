@@ -196,6 +196,11 @@ def save_scan_to_client_db(client_id, scan_data):
             json.dumps(scan_data), datetime.now().isoformat(), datetime.now().isoformat()
         ))
         
+        logger.info(f"✅ Saved scan {scan_id} for scanner {scanner_id} to client {client_id} database")
+        logger.info(f"   📊 Scan details: email={lead_email}, target={target_domain}, score={security_score}")
+        logger.info(f"   🔍 Saved comprehensive data: findings={len(scan_data.get('findings', []))}, recommendations={len(scan_data.get('recommendations', []))}")
+        logger.info(f"   📝 Scan data keys: {list(scan_data.keys())}")
+        
         # Update or insert lead information
         if lead_email:
             cursor.execute('SELECT * FROM leads WHERE email = ?', (lead_email,))
@@ -386,12 +391,192 @@ def get_scanner_scan_count(client_id, scanner_id):
         result = cursor.fetchone()
         scan_count = result[0] if result else 0
         
+        # Debug: List all scans for this scanner
+        cursor.execute('SELECT scan_id, timestamp FROM scans WHERE scanner_id = ? ORDER BY timestamp DESC LIMIT 5', (scanner_id,))
+        recent_scans = cursor.fetchall()
+        logger.info(f"Scanner {scanner_id} has {scan_count} total scans. Recent: {[(row[0][:8], row[1]) for row in recent_scans]}")
+        
         conn.close()
         return scan_count
         
     except Exception as e:
         logging.error(f"Error getting scanner scan count for {scanner_id}: {e}")
         return 0
+
+def get_scanner_scan_reports(client_id, scanner_id, page=1, per_page=10):
+    """Get scan reports for a specific scanner with pagination"""
+    try:
+        db_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'client_databases')
+        db_path = os.path.join(db_dir, f'client_{client_id}_scans.db')
+        
+        if not os.path.exists(db_path):
+            return [], {'page': page, 'per_page': per_page, 'total_pages': 1, 'total_count': 0}
+        
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Get total count for pagination
+        cursor.execute('SELECT COUNT(*) FROM scans WHERE scanner_id = ?', (scanner_id,))
+        total_count = cursor.fetchone()[0]
+        
+        # Calculate pagination
+        total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
+        offset = (page - 1) * per_page
+        
+        # Get paginated results
+        cursor.execute('''
+        SELECT * FROM scans 
+        WHERE scanner_id = ? 
+        ORDER BY timestamp DESC 
+        LIMIT ? OFFSET ?
+        ''', (scanner_id, per_page, offset))
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        # Convert to list of dicts
+        reports = []
+        for row in rows:
+            report = dict(row)
+            # Parse scan_results if it's JSON
+            if report.get('scan_results'):
+                try:
+                    report['parsed_results'] = json.loads(report['scan_results'])
+                except:
+                    report['parsed_results'] = {}
+            reports.append(report)
+        
+        pagination = {
+            'page': page,
+            'per_page': per_page,
+            'total_pages': total_pages,
+            'total_count': total_count
+        }
+        
+        logger.info(f"Retrieved {len(reports)} scan reports for scanner {scanner_id}")
+        return reports, pagination
+        
+    except Exception as e:
+        logger.error(f"Error getting scan reports for scanner {scanner_id}: {e}")
+        return [], {'page': page, 'per_page': per_page, 'total_pages': 1, 'total_count': 0}
+
+def get_scan_by_id(scan_id):
+    """Search for a scan by ID across all client databases"""
+    try:
+        db_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'client_databases')
+        
+        if not os.path.exists(db_dir):
+            return None
+        
+        # Search through all client database files
+        for db_file in os.listdir(db_dir):
+            if db_file.startswith('client_') and db_file.endswith('_scans.db'):
+                db_path = os.path.join(db_dir, db_file)
+                
+                try:
+                    conn = sqlite3.connect(db_path)
+                    conn.row_factory = sqlite3.Row
+                    cursor = conn.cursor()
+                    
+                    cursor.execute('SELECT * FROM scans WHERE scan_id = ?', (scan_id,))
+                    row = cursor.fetchone()
+                    
+                    if row:
+                        scan_data = dict(row)
+                        # Parse scan_results if it's JSON
+                        if scan_data.get('scan_results'):
+                            try:
+                                scan_data['parsed_results'] = json.loads(scan_data['scan_results'])
+                            except:
+                                scan_data['parsed_results'] = {}
+                        
+                        conn.close()
+                        logger.info(f"Found scan {scan_id} in database {db_file}")
+                        return scan_data
+                    
+                    conn.close()
+                    
+                except Exception as db_error:
+                    logger.error(f"Error searching in {db_file}: {db_error}")
+                    continue
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error searching for scan {scan_id}: {e}")
+        return None
+
+
+def get_recent_client_scans(client_id, limit=10):
+    """Get recent scans for a specific client"""
+    try:
+        db_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'client_databases')
+        db_path = os.path.join(db_dir, f'client_{client_id}_scans.db')
+        
+        if not os.path.exists(db_path):
+            return []
+        
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Get recent scans with all details
+        cursor.execute('''
+            SELECT * FROM scans 
+            ORDER BY timestamp DESC 
+            LIMIT ?
+        ''', (limit,))
+        
+        scans = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return scans
+        
+    except Exception as e:
+        logging.error(f"Error getting recent scans for client {client_id}: {e}")
+        return []
+
+
+def get_all_client_scan_statistics():
+    """Get aggregated scan statistics across all clients"""
+    try:
+        db_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'client_databases')
+        
+        if not os.path.exists(db_dir):
+            return {'total_scans': 0, 'clients_with_scans': 0}
+        
+        total_scans = 0
+        clients_with_scans = 0
+        
+        for filename in os.listdir(db_dir):
+            if filename.startswith('client_') and filename.endswith('_scans.db'):
+                try:
+                    db_path = os.path.join(db_dir, filename)
+                    conn = sqlite3.connect(db_path)
+                    cursor = conn.cursor()
+                    
+                    cursor.execute('SELECT COUNT(*) FROM scans')
+                    client_scan_count = cursor.fetchone()[0]
+                    
+                    if client_scan_count > 0:
+                        total_scans += client_scan_count
+                        clients_with_scans += 1
+                    
+                    conn.close()
+                    
+                except Exception as e:
+                    logging.warning(f"Error reading {filename}: {e}")
+                    continue
+        
+        return {
+            'total_scans': total_scans,
+            'clients_with_scans': clients_with_scans
+        }
+        
+    except Exception as e:
+        logging.error(f"Error getting all client scan statistics: {e}")
+        return {'total_scans': 0, 'clients_with_scans': 0}
 
 def get_client_scan_statistics(client_id):
     """Get scan statistics from client's dedicated database"""

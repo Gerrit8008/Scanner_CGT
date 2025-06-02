@@ -1,48 +1,38 @@
 #!/usr/bin/env python3
 """
-Activation script for enhanced admin dashboard
+Activation module for enhanced admin dashboard
 
-This script activates the enhanced admin dashboard by patching the admin.py file.
-It preserves all existing functionality while adding comprehensive data display.
+This module is designed to be imported in the app.py file
+to automatically activate the enhanced admin dashboard on startup.
 """
 
 import logging
-from enhanced_admin_dashboard import enhance_admin_dashboard
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def main():
-    """Activate the enhanced admin dashboard"""
-    print("=" * 60)
-    print("Activating Enhanced Admin Dashboard")
-    print("=" * 60)
+def activate_enhanced_dashboard():
+    """
+    Activate the enhanced admin dashboard
     
+    This function is called when the application starts.
+    It loads the enhanced_admin_dashboard module and applies the enhancements.
+    """
     try:
-        # Apply the enhancement
+        logger.info("🔄 Activating enhanced admin dashboard...")
+        from enhanced_admin_dashboard import enhance_admin_dashboard
         success = enhance_admin_dashboard()
         
         if success:
-            print("\n✅ Enhanced admin dashboard activated successfully!")
-            print("\nThe admin dashboard now displays comprehensive data including:")
-            print("  - Detailed client information")
-            print("  - Scanner deployment statistics")
-            print("  - Lead generation data")
-            print("  - System health metrics")
-            print("  - User activity tracking")
-            print("  - Real-time data visualization")
-            print("\nNo functionality has been lost in the process.")
+            logger.info("✅ Enhanced admin dashboard activated successfully")
         else:
-            print("\n❌ Failed to activate enhanced admin dashboard")
-            print("Please check the logs for details")
+            logger.warning("⚠️ Failed to activate enhanced admin dashboard")
+            
+        return success
     except Exception as e:
-        logger.error(f"Error activating enhanced dashboard: {str(e)}")
-        print(f"\n❌ Error: {str(e)}")
-        print("Please check the logs for details")
+        logger.error(f"❌ Error activating enhanced admin dashboard: {str(e)}")
+        return False
 
-if __name__ == "__main__":
-    main()
+# Auto-execute when imported
+activate_enhanced_dashboard()

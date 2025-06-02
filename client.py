@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 import os
 import logging
 import json
+import re
 import time
 from datetime import datetime
 from functools import wraps
@@ -26,8 +27,248 @@ from client_db import (
     format_scan_results_for_client,
     register_client,
     get_scan_reports_for_client,
-    get_scan_statistics_for_client
+    get_scan_statistics_for_client,
+    get_db_connection
 )
+
+
+def get_color_for_score(score):
+    """Get appropriate color based on score"""
+    if score >= 90:
+        return '#28a745'  # green
+    elif score >= 80:
+        return '#5cb85c'  # light green
+    elif score >= 70:
+        return '#17a2b8'  # info blue
+    elif score >= 60:
+        return '#ffc107'  # warning yellow
+    elif score >= 50:
+        return '#fd7e14'  # orange
+    else:
+        return '#dc3545'  # red
+
+
+def process_scan_data(scan):
+    '''Process and enhance scan data for display'''
+    if not scan:
+        return {}
+    
+    # Handle string JSON data
+    if isinstance(scan, str):
+        try:
+            scan_data = json.loads(scan)
+        except:
+            return {}
+    else:
+        # Make a copy to avoid modifying the original
+        if hasattr(scan, 'get'):  # dict-like object
+            scan_data = dict(scan)
+        else:
+            return scan  # Can't process
+    
+    # Parse scan_results if it exists
+    if scan_data.get('scan_results') and isinstance(scan_data['scan_results'], str):
+        try:
+            parsed_results = json.loads(scan_data['scan_results'])
+            if isinstance(parsed_results, dict):
+                # Merge parsed results with scan_data, but don't overwrite existing keys
+                for key, value in parsed_results.items():
+                    if key not in scan_data:
+                        scan_data[key] = value
+        except:
+            pass  # Failed to parse scan_results
+    
+    # Ensure 'network' section exists with open_ports data
+    if 'network' not in scan_data:
+        scan_data['network'] = {}
+    
+    # Ensure open_ports structure exists
+    if 'open_ports' not in scan_data['network']:
+        # Check if 'network' is a list of findings
+        if isinstance(scan_data['network'], list):
+            # Extract port information from network findings
+            port_list = []
+            port_details = []
+            
+            for finding in scan_data['network']:
+                if isinstance(finding, tuple) and len(finding) >= 2:
+                    message, severity = finding
+                    # Extract port info if this is a port finding
+                    if 'Port ' in message and ' is open' in message:
+                        try:
+                            port_match = re.search(r'Port (\d+)', message)
+                            if port_match:
+                                port_num = int(port_match.group(1))
+                                service = "Unknown"
+                                # Try to extract service name if in parentheses
+                                service_match = re.search(r'\((.*?)\)', message)
+                                if service_match:
+                                    service = service_match.group(1)
+                                
+                                port_list.append(port_num)
+                                port_details.append({
+                                    'port': port_num,
+                                    'service': service,
+                                    'severity': severity
+                                })
+                        except Exception as e:
+                            pass  # Skip this finding if we can't parse it
+            
+            # Create structured open_ports data
+            scan_data['network'] = {
+                'scan_results': scan_data['network'],  # Keep original findings
+                'open_ports': {
+                    'count': len(port_list),
+                    'list': port_list,
+                    'details': port_details,
+                    'severity': 'High' if len(port_list) > 5 else 'Medium' if len(port_list) > 2 else 'Low'
+                }
+            }
+        else:
+            # Just ensure the structure exists
+            scan_data['network']['open_ports'] = {
+                'count': 0,
+                'list': [],
+                'details': [],
+                'severity': 'Low'
+            }
+    
+    # Ensure client_info section exists
+    if 'client_info' not in scan_data:
+        scan_data['client_info'] = {}
+    
+    # Add OS and browser info if missing
+    if ('os' not in scan_data['client_info'] or 'browser' not in scan_data['client_info']) and 'user_agent' in scan_data:
+        # Detect OS and browser from user agent
+        user_agent = scan_data.get('user_agent', '')
+        os_info, browser_info = detect_os_and_browser(user_agent)
+        
+        if 'os' not in scan_data['client_info'] or not scan_data['client_info']['os']:
+            scan_data['client_info']['os'] = os_info
+        
+        if 'browser' not in scan_data['client_info'] or not scan_data['client_info']['browser']:
+            scan_data['client_info']['browser'] = browser_info
+    
+    # Ensure risk_assessment section has proper formatting
+    if 'risk_assessment' in scan_data:
+        if isinstance(scan_data['risk_assessment'], (int, float, str)):
+            # Convert simple score to full risk assessment object
+            try:
+                score = float(scan_data['risk_assessment'])
+                scan_data['risk_assessment'] = {
+                    'overall_score': score,
+                    'risk_level': get_risk_level(score),
+                    'color': get_color_for_score(score)
+                }
+            except:
+                # Keep as is if we can't convert
+                pass
+        elif isinstance(scan_data['risk_assessment'], dict):
+            # Ensure color exists
+            if 'color' not in scan_data['risk_assessment'] and 'overall_score' in scan_data['risk_assessment']:
+                score = scan_data['risk_assessment']['overall_score']
+                scan_data['risk_assessment']['color'] = get_color_for_score(score)
+    
+    # Format risk levels for client-friendly display (from CybrScann-main)
+    if 'risk_assessment' in scan_data:
+        risk_level = scan_data['risk_assessment'].get('risk_level', 'Unknown')
+        if risk_level.lower() == 'critical':
+            scan_data['risk_color'] = 'danger'
+        elif risk_level.lower() == 'high':
+            scan_data['risk_color'] = 'warning'
+        elif risk_level.lower() == 'medium':
+            scan_data['risk_color'] = 'info'
+        else:
+            scan_data['risk_color'] = 'success'
+    
+    # Format dates for display (from CybrScann-main)
+    if 'timestamp' in scan_data:
+        try:
+            dt = datetime.fromisoformat(scan_data['timestamp'])
+            scan_data['formatted_date'] = dt.strftime('%B %d, %Y at %I:%M %p')
+        except:
+            pass
+    
+    # Add summary statistics (from CybrScann-main)
+    if 'risk_assessment' in scan_data:
+        risk_assessment = scan_data['risk_assessment']
+        scan_data['total_issues'] = (
+            risk_assessment.get('critical_issues', 0) +
+            risk_assessment.get('high_issues', 0) +
+            risk_assessment.get('medium_issues', 0) +
+            risk_assessment.get('low_issues', 0)
+        )
+    
+    return scan_data
+
+def detect_os_and_browser(user_agent):
+    '''Detect OS and browser from user agent string'''
+    os_info = "Unknown"
+    browser_info = "Unknown"
+    
+    if not user_agent:
+        return os_info, browser_info
+    
+    # Detect OS
+    if "Windows" in user_agent:
+        if "Windows NT 10" in user_agent:
+            os_info = "Windows 10/11"
+        elif "Windows NT 6.3" in user_agent:
+            os_info = "Windows 8.1"
+        elif "Windows NT 6.2" in user_agent:
+            os_info = "Windows 8"
+        elif "Windows NT 6.1" in user_agent:
+            os_info = "Windows 7"
+        elif "Windows NT 6.0" in user_agent:
+            os_info = "Windows Vista"
+        elif "Windows NT 5.1" in user_agent:
+            os_info = "Windows XP"
+        else:
+            os_info = "Windows"
+    elif "Mac OS X" in user_agent:
+        if "iPhone" in user_agent or "iPad" in user_agent:
+            os_info = "iOS"
+        else:
+            os_info = "macOS"
+    elif "Linux" in user_agent:
+        if "Android" in user_agent:
+            os_info = "Android"
+        else:
+            os_info = "Linux"
+    elif "FreeBSD" in user_agent:
+        os_info = "FreeBSD"
+    
+    # Detect browser
+    if "Firefox/" in user_agent:
+        browser_info = "Firefox"
+    elif "Edge/" in user_agent or "Edg/" in user_agent:
+        browser_info = "Edge"
+    elif "Chrome/" in user_agent and "Chromium" not in user_agent and "Edge" not in user_agent and "Edg/" not in user_agent:
+        browser_info = "Chrome"
+    elif "Safari/" in user_agent and "Chrome" not in user_agent and "Edge" not in user_agent:
+        browser_info = "Safari"
+    elif "MSIE" in user_agent or "Trident/" in user_agent:
+        browser_info = "Internet Explorer"
+    elif "Opera/" in user_agent or "OPR/" in user_agent:
+        browser_info = "Opera"
+    
+    return os_info, browser_info
+
+def get_risk_level(score):
+    '''Get risk level text based on score'''
+    if score >= 90:
+        return 'Low'
+    elif score >= 80:
+        return 'Low-Medium'
+    elif score >= 70:
+        return 'Medium'
+    elif score >= 60:
+        return 'Medium-High'
+    elif score >= 50:
+        return 'High'
+    else:
+        return 'Critical'
+
 
 # Define client blueprint
 client_bp = Blueprint('client', __name__, url_prefix='/client')
@@ -35,40 +276,6 @@ client_bp = Blueprint('client', __name__, url_prefix='/client')
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-def get_client_total_scans(client_id):
-    """Get total number of scans used by a client in the current billing period"""
-    try:
-        # Connect to database
-        from client_db import get_db_connection
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # First try to query the scan_history table
-        try:
-            cursor.execute(
-                "SELECT COUNT(*) FROM scan_history WHERE client_id = ?", 
-                (client_id,)
-            )
-            total_scans = cursor.fetchone()[0]
-        except:
-            # If scan_history table doesn't exist or doesn't have client_id column
-            # try the scans table
-            try:
-                cursor.execute(
-                    "SELECT COUNT(*) FROM scans WHERE client_id = ?", 
-                    (client_id,)
-                )
-                total_scans = cursor.fetchone()[0]
-            except:
-                total_scans = 0
-        
-        conn.close()
-        return total_scans
-    except Exception as e:
-        logger.error(f"Error getting client total scans for client {client_id}: {e}")
-        return 0
 
 # Remove duplicate imports and blueprint definition
 
@@ -91,16 +298,15 @@ def client_required(f):
             flash('Please log in to access this page', 'danger')
             return redirect(url_for('auth.login', next=request.url))
         
-        # Add role check - ensure user is a client
-        if result['user']['role'] != 'client':
+        # Add role check - ensure user is a client or admin (admins can access for testing)
+        if result['user']['role'] not in ['client', 'admin']:
             logger.warning(f"Access denied: User {result['user']['username']} with role {result['user']['role']} attempted to access client area")
             flash('Access denied. This area is for clients only.', 'danger')
-            
-            # Redirect admins to their dashboard
-            if result['user']['role'] == 'admin':
-                return redirect(url_for('admin.dashboard'))
-            else:
-                return redirect(url_for('auth.login'))
+            return redirect(url_for('auth.login'))
+        
+        # Log admin access for monitoring
+        if result['user']['role'] == 'admin':
+            logger.info(f"Admin {result['user']['username']} accessing client area for testing/management")
         
         # Add user info to kwargs
         kwargs['user'] = result['user']
@@ -114,43 +320,61 @@ def get_client_total_scans(client_id):
     try:
         from client_database_manager import get_client_scan_statistics
         stats = get_client_scan_statistics(client_id)
-        return stats.get('total_scans', 0)
+        total_scans = stats.get('total_scans', 0)
+        logger.info(f"Client {client_id} total scans: {total_scans}")
+        return total_scans
     except Exception as e:
-        logger.error(f"Error getting client total scans: {e}")
+        logger.error(f"Error getting client total scans for client {client_id}: {e}")
         return 0
 
 def get_client_scan_limit(client):
     """Get scan limit based on client's subscription level"""
     if not client:
-        return 50  # Default starter plan
+        return 10  # Default basic plan
     
-    subscription_level = client.get('subscription_level', 'starter').lower()
+    subscription_level = client.get('subscription_level', 'basic').lower()
+    
+    # Handle legacy plan names
+    legacy_plan_mapping = {
+        'business': 'professional',
+        'pro': 'professional'
+    }
+    
+    if subscription_level in legacy_plan_mapping:
+        subscription_level = legacy_plan_mapping[subscription_level]
     
     # Define plan limits
     plan_limits = {
+        'basic': 10,
         'starter': 50,
-        'basic': 100,
-        'professional': 250,
-        'business': 500,
+        'professional': 500,
         'enterprise': 1000
     }
     
-    return plan_limits.get(subscription_level, 50)
+    return plan_limits.get(subscription_level, 10)
 
 def get_client_scanner_limit(client):
     """Get scanner limit based on client's subscription level"""
     if not client:
-        return 1  # Default starter plan
+        return 1  # Default basic plan
     
-    subscription_level = client.get('subscription_level', 'starter').lower()
+    subscription_level = client.get('subscription_level', 'basic').lower()
+    
+    # Handle legacy plan names
+    legacy_plan_mapping = {
+        'business': 'professional',
+        'pro': 'professional'
+    }
+    
+    if subscription_level in legacy_plan_mapping:
+        subscription_level = legacy_plan_mapping[subscription_level]
     
     # Define scanner limits
     scanner_limits = {
+        'basic': 1,
         'starter': 1,
-        'basic': 3,
-        'professional': 5,
-        'business': 10,
-        'enterprise': 25
+        'professional': 3,
+        'enterprise': 10
     }
     
     return scanner_limits.get(subscription_level, 1)
@@ -203,6 +427,7 @@ def dashboard(user):
                 logger.info(f"Found {len(client_scanners) if client_scanners else 0} scanners for client {client['id']}")
                 if client_scanners:
                     logger.info(f"Scanner details: {[s.get('scanner_name', s.get('name', 'Unknown')) for s in client_scanners]}")
+                    logger.info(f"Scanner IDs: {[s.get('scanner_id', 'No scanner_id') for s in client_scanners]}")
             except Exception as e:
                 logger.error(f"Error fetching scanners for client {client['id']}: {e}")
                 client_scanners = []
@@ -396,9 +621,6 @@ def scanners(user):
             pagination = {'page': 1, 'per_page': 10, 'total_pages': 1, 'total_count': 0}
         
         # Add scan usage information
-        # Import subscription constants
-        from subscription_constants import get_client_scan_limit, get_client_scanner_limit
-        
         scans_used = get_client_total_scans(client['id']) if client else 0
         scans_limit = get_client_scan_limit(client) if client else 50
         scanner_limit = get_client_scanner_limit(client) if client else 1
@@ -548,6 +770,8 @@ def scanner_edit(user, scanner_id):
                 'primary_color': request.form.get('primary_color'),
                 'secondary_color': request.form.get('secondary_color'),
                 'button_color': request.form.get('button_color'),
+                'font_family': request.form.get('font_family', 'Inter'),
+                'color_style': request.form.get('color_style', 'gradient'),
                 'email_subject': request.form.get('email_subject'),
                 'email_intro': request.form.get('email_intro'),
                 'scanner_description': request.form.get('scanner_description'),
@@ -578,6 +802,7 @@ def scanner_edit(user, scanner_id):
                     # Save file
                     logo_file.save(file_path)
                     scanner_data['logo_path'] = f"/static/uploads/{unique_filename}"
+                    scanner_data['logo_url'] = f"/static/uploads/{unique_filename}"  # Add both for compatibility
                     
                     # Also update the scanner variable for immediate display
                     scanner['logo_path'] = scanner_data['logo_path']
@@ -926,10 +1151,10 @@ def scanner_regenerate_api_key(user, scanner_id):
         return jsonify({'status': 'error', 'message': str(e)})
         
         
-@client_bp.route('/reports/<scan_id>')
+@client_bp.route('/scanners/<int:scanner_id>/reports')
 @client_required
-def report_view(user, scan_id):
-    """View a specific scan report"""
+def scanner_reports(user, scanner_id):
+    """Display reports for a specific scanner"""
     try:
         # Get client info
         client = get_client_by_user_id(user['user_id'])
@@ -938,25 +1163,225 @@ def report_view(user, scan_id):
             flash('Please complete your client profile', 'info')
             return redirect(url_for('auth.complete_profile'))
         
-        # Get scan details
-        from db import get_scan_results
-        scan = get_scan_results(scan_id)
+        # Get scanner details to verify ownership
+        scanner = get_scanner_by_id(scanner_id)
         
-        if not scan:
-            flash('Scan report not found', 'danger')
-            return redirect(url_for('client.reports'))
+        if not scanner or scanner['client_id'] != client['id']:
+            flash('Scanner not found', 'danger')
+            return redirect(url_for('client.scanners'))
         
-        # Verify this scan belongs to the client
-        # TODO: Implement proper ownership verification
+        # Get pagination parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
         
-        # Format scan results for client-friendly display
-        formatted_scan = format_scan_results_for_client(scan)
+        # Get scan reports for this specific scanner
+        try:
+            from client_database_manager import get_scanner_scan_reports
+            scan_reports, pagination = get_scanner_scan_reports(client['id'], scanner['scanner_id'], page, per_page)
+        except Exception as e:
+            logger.error(f"Error getting scanner reports: {e}")
+            scan_reports, pagination = [], {'page': 1, 'per_page': per_page, 'total_pages': 1, 'total_count': 0}
         
         return render_template(
-            'client/report-view.html',
+            'client/scan-reports.html',
             user=user,
             client=client,
-            scan=formatted_scan or scan
+            scanner=scanner,
+            scan_reports=scan_reports,
+            pagination=pagination,
+            page_title=f"Reports for {scanner['name']}"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error displaying scanner reports: {str(e)}")
+        flash('An error occurred while loading scanner reports', 'danger')
+        return redirect(url_for('client.scanners'))
+
+@client_bp.route('/reports/<scan_id>')
+@client_required
+def report_view(user, scan_id):
+    """View a specific scan report"""
+    try:
+        logger.info(f"🔍 Report view requested for scan_id: {scan_id} by user: {user.get('username', 'unknown')}")
+        
+        # Get client info
+        client = get_client_by_user_id(user['user_id'])
+        
+        if not client:
+            flash('Please complete your client profile', 'info')
+            return redirect(url_for('auth.complete_profile'))
+        
+        # Get scan details from database
+        scan = None
+        try:
+            from database_utils import get_scan_results
+            scan = get_scan_results(scan_id)
+        except Exception as e:
+            logger.error(f"Error getting scan from database_utils: {e}")
+        
+        # If not found in main database, try client-specific databases
+        if not scan:
+            try:
+                from client_database_manager import get_scan_by_id
+                scan = get_scan_by_id(scan_id)
+            except Exception as e:
+                logger.error(f"Error getting scan from client databases: {e}")
+        
+        if not scan:
+            logger.warning(f"❌ Scan not found for scan_id: {scan_id}")
+            flash('Scan report not found', 'danger')
+            return redirect(url_for('client.scan_reports'))
+        
+        logger.info(f"✅ Found scan {scan_id}: {scan.get('lead_email', 'unknown')} -> {scan.get('target_domain', 'unknown')}")
+        
+        # Verify this scan belongs to the client (basic check)
+        if hasattr(scan, 'get') and scan.get('client_id') and scan.get('client_id') != client['id']:
+            logger.warning(f"❌ Access denied: scan {scan_id} belongs to client {scan.get('client_id')} but user is client {client['id']}")
+            flash('Access denied to this scan report', 'danger')
+            return redirect(url_for('client.scan_reports'))
+        
+        # Get scanner branding information if available
+        scanner_branding = None
+        if scan and scan.get('scanner_id'):
+            try:
+                from client_db import get_db_connection
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute('''
+                SELECT s.*, c.business_name,
+                       COALESCE(s.primary_color, cu.primary_color, '#02054c') as final_primary_color,
+                       COALESCE(s.secondary_color, cu.secondary_color, '#35a310') as final_secondary_color,
+                       COALESCE(s.logo_url, cu.logo_path, '') as final_logo_url,
+                       COALESCE(s.email_subject, cu.email_subject, 'Your Security Scan Report') as final_email_subject,
+                       COALESCE(s.email_intro, cu.email_intro, '') as final_email_intro,
+                       cu.scanner_description, cu.cta_button_text, cu.company_tagline, 
+                       cu.support_email, cu.custom_footer_text, cu.favicon_path
+                FROM scanners s 
+                JOIN clients c ON s.client_id = c.id 
+                LEFT JOIN customizations cu ON c.id = cu.client_id
+                WHERE s.scanner_id = ?
+                ''', (scan.get('scanner_id'),))
+                
+                scanner_row = cursor.fetchone()
+                conn.close()
+                
+                if scanner_row:
+                    # Convert to dict for easier access
+                    scanner_data = dict(scanner_row) if hasattr(scanner_row, 'keys') else dict(zip([col[0] for col in cursor.description], scanner_row))
+                    
+                    # Create client branding object using COALESCED final values (same as scanner_routes.py)
+                    scanner_branding = {
+                        'business_name': scanner_data.get('name', scanner_data.get('business_name', '')),  # Use scanner name first
+                        'primary_color': scanner_data.get('final_primary_color', '#02054c'),
+                        'secondary_color': scanner_data.get('final_secondary_color', '#35a310'),
+                        'button_color': scanner_data.get('final_primary_color', '#02054c'),
+                        'logo_path': scanner_data.get('final_logo_url', ''),
+                        'logo_url': scanner_data.get('final_logo_url', ''),
+                        'favicon_path': scanner_data.get('favicon_path', ''),
+                        'scanner_name': scanner_data.get('name', 'Security Scanner'),
+                        'email_subject': scanner_data.get('final_email_subject', 'Your Security Scan Report'),
+                        'email_intro': scanner_data.get('final_email_intro', ''),
+                        'scanner_description': scanner_data.get('scanner_description', ''),
+                        'cta_button_text': scanner_data.get('cta_button_text', 'Start Security Scan'),
+                        'company_tagline': scanner_data.get('company_tagline', ''),
+                        'support_email': scanner_data.get('support_email', ''),
+                        'custom_footer_text': scanner_data.get('custom_footer_text', '')
+                    }
+                    
+                    logger.info(f"Retrieved scanner branding for scanner {scan.get('scanner_id')}: primary={scanner_branding['primary_color']}, secondary={scanner_branding['secondary_color']}, logo={scanner_branding['logo_url']}")
+                else:
+                    logger.warning(f"No scanner found for scanner_id: {scan.get('scanner_id')}")
+                    
+            except Exception as e:
+                logger.error(f"Error getting scanner branding: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+        
+        # Format scan data for template - preserve comprehensive scan data
+        formatted_scan = process_scan_data(scan)
+        if scan and not scan.get('client_info'):
+            # Check if this is from parsed_results (comprehensive) or raw database (minimal)
+            if scan.get('parsed_results') and scan['parsed_results'].get('findings'):
+                # Use the comprehensive parsed_results
+                formatted_scan = scan['parsed_results']
+                logger.info(f"Using comprehensive parsed_results with {len(formatted_scan.get('findings', []))} findings")
+            elif scan.get('scan_results'):
+                # Try to parse scan_results JSON field
+                try:
+                    import json
+                    comprehensive_data = json.loads(scan.get('scan_results', '{}'))
+                    if comprehensive_data.get('findings'):
+                        formatted_scan = comprehensive_data
+                        logger.info(f"Using comprehensive scan_results with {len(formatted_scan.get('findings', []))} findings")
+                except:
+                    pass
+            
+            # If we still don't have client_info, add it while preserving existing data
+            if not formatted_scan.get('client_info'):
+                # Copy the original scan data to preserve comprehensive results
+                if isinstance(formatted_scan, dict):
+                    formatted_scan = dict(formatted_scan)  # Make a copy
+                else:
+                    formatted_scan = dict(scan)
+                
+                # Add missing client_info structure without overriding existing comprehensive data
+                formatted_scan['client_info'] = {
+                    'name': scan.get('lead_name', formatted_scan.get('name', 'N/A')),
+                    'email': scan.get('lead_email', formatted_scan.get('email', 'N/A')),
+                    'company': scan.get('lead_company', formatted_scan.get('company', 'N/A')),
+                    'phone': scan.get('lead_phone', 'N/A'),
+                    'os': scan.get('user_agent', 'N/A'),
+                    'browser': scan.get('user_agent', 'N/A')
+                }
+                
+                # Ensure risk_assessment has required structure for template
+                if not formatted_scan.get('risk_assessment') or not isinstance(formatted_scan.get('risk_assessment'), dict):
+                    formatted_scan['risk_assessment'] = {
+                        'overall_score': scan.get('security_score', 75),
+                        'risk_level': scan.get('risk_level', 'Medium'),
+                        'color': get_color_for_score(scan.get('security_score', 75)),
+                        'critical_issues': 0,
+                        'high_issues': 1,
+                        'medium_issues': 1,
+                        'low_issues': 1
+                    }
+                
+                logger.info(f"Enhanced scan data: findings={len(formatted_scan.get('findings', []))}, recommendations={len(formatted_scan.get('recommendations', []))}")
+        
+        # Format risk levels for client-friendly display (if not already done)
+        if 'risk_assessment' in formatted_scan and 'risk_color' not in formatted_scan:
+            risk_level = formatted_scan['risk_assessment'].get('risk_level', 'Unknown')
+            if risk_level.lower() == 'critical':
+                formatted_scan['risk_color'] = 'danger'
+            elif risk_level.lower() == 'high':
+                formatted_scan['risk_color'] = 'warning'
+            elif risk_level.lower() == 'medium':
+                formatted_scan['risk_color'] = 'info'
+            else:
+                formatted_scan['risk_color'] = 'success'
+        
+        # Format dates for display (if not already done)
+        if 'timestamp' in formatted_scan and 'formatted_date' not in formatted_scan:
+            try:
+                dt = datetime.fromisoformat(formatted_scan['timestamp'])
+                formatted_scan['formatted_date'] = dt.strftime('%B %d, %Y at %I:%M %p')
+            except:
+                pass
+        
+        # Add summary statistics (if not already done)
+        if 'risk_assessment' in formatted_scan and 'total_issues' not in formatted_scan:
+            risk_assessment = formatted_scan['risk_assessment']
+            formatted_scan['total_issues'] = (
+                risk_assessment.get('critical_issues', 0) +
+                risk_assessment.get('high_issues', 0) +
+                risk_assessment.get('medium_issues', 0) +
+                risk_assessment.get('low_issues', 0)
+            )
+        
+        return render_template(
+            'results.html',
+            scan=formatted_scan,
+            client_branding=scanner_branding  # Pass scanner branding as client_branding for template compatibility
         )
     except Exception as e:
         logger.error(f"Error displaying report: {str(e)}")
@@ -1237,31 +1662,82 @@ def scanner_create(user):
         
         # Check scanner limits based on subscription
         from client_db import get_db_connection
-        from subscription_constants import get_client_scanner_limit
-        
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('SELECT COUNT(*) FROM scanners WHERE client_id = ? AND status != "deleted"', (client['id'],))
         current_scanners = cursor.fetchone()[0]
         conn.close()
         
-        # Get scanner limit based on client's subscription level
         scanner_limit = get_client_scanner_limit(client)
         
         # If at limit, redirect to upgrade page
         if current_scanners >= scanner_limit:
             flash(f'Scanner limit reached ({current_scanners}/{scanner_limit}). Please upgrade your subscription to create more scanners.', 'warning')
-            return redirect(url_for('client.scanners'))
+            return redirect(url_for('client.upgrade_subscription'))
         
         if request.method == 'POST':
+            # Handle file upload
+            logo_url = None
+            if 'logo_upload' in request.files and request.files['logo_upload'].filename:
+                logo_file = request.files['logo_upload']
+                try:
+                    from werkzeug.utils import secure_filename
+                    import uuid
+                    
+                    # Create upload directory if it doesn't exist
+                    upload_dir = os.path.join('static', 'uploads')
+                    os.makedirs(upload_dir, exist_ok=True)
+                    
+                    # Generate unique filename
+                    file_ext = os.path.splitext(logo_file.filename)[1]
+                    filename = f"logo_{client['id']}_{uuid.uuid4().hex[:8]}{file_ext}"
+                    file_path = os.path.join(upload_dir, filename)
+                    
+                    logo_file.save(file_path)
+                    logo_url = f'/static/uploads/{filename}'
+                    logger.info(f"Logo uploaded successfully: {logo_url}")
+                except Exception as e:
+                    logger.error(f"Error uploading logo: {e}")
+                    flash('Error uploading logo, but scanner will be created without it', 'warning')
+            
+            # Handle favicon upload
+            favicon_url = None
+            if 'favicon_upload' in request.files and request.files['favicon_upload'].filename:
+                favicon_file = request.files['favicon_upload']
+                try:
+                    from werkzeug.utils import secure_filename
+                    import uuid
+                    
+                    # Create upload directory if it doesn't exist
+                    upload_dir = os.path.join('static', 'uploads')
+                    os.makedirs(upload_dir, exist_ok=True)
+                    
+                    # Generate unique filename
+                    file_ext = os.path.splitext(favicon_file.filename)[1]
+                    filename = f"favicon_{client['id']}_{uuid.uuid4().hex[:8]}{file_ext}"
+                    file_path = os.path.join(upload_dir, filename)
+                    
+                    favicon_file.save(file_path)
+                    favicon_url = f'/static/uploads/{filename}'
+                    logger.info(f"Favicon uploaded successfully: {favicon_url}")
+                except Exception as e:
+                    logger.error(f"Error uploading favicon: {e}")
+                    flash('Error uploading favicon, but scanner will be created without it', 'warning')
+            
             # Get form data
             scanner_data = {
                 'name': request.form.get('scanner_name', '').strip(),
                 'description': request.form.get('description', '').strip(),
                 'domain': request.form.get('domain', '').strip(),
+                'contact_email': request.form.get('contact_email', '').strip(),
+                'contact_phone': request.form.get('contact_phone', '').strip(),
                 'primary_color': request.form.get('primary_color', '#02054c'),
                 'secondary_color': request.form.get('secondary_color', '#35a310'),
-                'logo_url': request.form.get('logo_url', ''),
+                'button_color': request.form.get('button_color', '#28a745'),
+                'font_family': request.form.get('font_family', 'Inter'),
+                'color_style': request.form.get('color_style', 'gradient'),
+                'logo_url': logo_url or '',
+                'favicon_url': favicon_url or '',
                 'contact_email': request.form.get('contact_email', client['contact_email']),
                 'contact_phone': request.form.get('contact_phone', client.get('contact_phone', '')),
                 'email_subject': request.form.get('email_subject', 'Your Security Scan Report'),
@@ -1283,8 +1759,13 @@ def scanner_create(user):
             result = create_scanner_for_client(client['id'], scanner_data, user['user_id'])
             
             if result.get('status') == 'success':
+                scanner_uid = result.get('scanner_uid')
                 flash(f'Scanner "{scanner_data["name"]}" created successfully!', 'success')
-                return redirect(url_for('client.scanners'))
+                if scanner_uid:
+                    # Redirect to package selection after scanner creation
+                    return redirect(url_for('client.upgrade_subscription', scanner_created=scanner_uid))
+                else:
+                    return redirect(url_for('client.scanners'))
             else:
                 flash(f'Error creating scanner: {result.get("message", "Unknown error")}', 'danger')
                 return render_template('client/scanner-create.html', 
@@ -1302,6 +1783,142 @@ def scanner_create(user):
     except Exception as e:
         logger.error(f"Error creating scanner: {str(e)}")
         flash('An error occurred while creating the scanner', 'danger')
+
+@client_bp.route('/upgrade')
+@client_required  
+def upgrade_subscription(user):
+    """Subscription upgrade page with payment integration"""
+    try:
+        # Get client info
+        client = get_client_by_user_id(user['user_id'])
+        
+        if not client:
+            flash('Please complete your profile first', 'warning')
+            return redirect(url_for('client.profile'))
+        
+        # Get current subscription info
+        current_plan = client.get('subscription_level', 'basic').lower()
+        
+        # Plan details with pricing
+        plans = {
+            'basic': {'name': 'Basic', 'price': 0, 'scanners': 1, 'scans': 10, 'api_access': False},
+            'starter': {'name': 'Starter', 'price': 59, 'scanners': 1, 'scans': 50, 'api_access': True},
+            'professional': {'name': 'Professional', 'price': 99, 'scanners': 3, 'scans': 500, 'api_access': True},
+            'enterprise': {'name': 'Enterprise', 'price': 149, 'scanners': 10, 'scans': 1000, 'api_access': True}
+        }
+        
+        # Handle legacy plan names - map them to new plans
+        legacy_plan_mapping = {
+            'business': 'professional',
+            'pro': 'professional'
+        }
+        
+        if current_plan in legacy_plan_mapping:
+            current_plan = legacy_plan_mapping[current_plan]
+        
+        # Ensure current_plan exists in plans dictionary
+        if current_plan not in plans:
+            current_plan = 'basic'
+        
+        # Get current usage
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM scanners WHERE client_id = ? AND status != "deleted"', (client['id'],))
+        current_scanners = cursor.fetchone()[0]
+        conn.close()
+        
+        # Check if coming from scanner creation
+        scanner_created = request.args.get('scanner_created')
+        
+        return render_template('client/upgrade-subscription.html',
+                             user=user,
+                             client=client,
+                             current_plan=current_plan,
+                             plans=plans,
+                             current_scanners=current_scanners,
+                             scanner_created=scanner_created)
+        
+    except Exception as e:
+        logger.error(f"Error loading upgrade page: {str(e)}")
+        flash('An error occurred while loading the upgrade page', 'danger')
+        return redirect(url_for('client.dashboard'))
+
+@client_bp.route('/process-upgrade', methods=['POST'])
+@client_required
+def process_upgrade(user):
+    """Process subscription upgrade payment"""
+    try:
+        # Get client info
+        client = get_client_by_user_id(user['user_id'])
+        
+        if not client:
+            flash('Please complete your profile first', 'warning')
+            return redirect(url_for('client.profile'))
+        
+        # Get form data
+        new_plan = request.form.get('plan')
+        
+        # Define plan pricing to check if payment is needed
+        plans = {
+            'basic': {'name': 'Basic', 'price': 0},
+            'starter': {'name': 'Starter', 'price': 59},
+            'professional': {'name': 'Professional', 'price': 99},
+            'enterprise': {'name': 'Enterprise', 'price': 149}
+        }
+        
+        # All plans are treated as free for direct processing
+        is_free_plan = True
+        
+        # No payment validation needed - all plans are processed directly
+        
+        # For free plans, Basic plan, or demo purposes, we'll accept test payment data
+        if is_free_plan:
+            is_test_payment = True
+        else:
+            is_test_payment = (
+                'test' in card_name.lower() or 
+                card_number.replace(' ', '') == '4111111111111111' or
+                card_number.replace(' ', '') == '1234567890123456'
+            )
+        
+        if is_test_payment:
+            # Simulate successful payment for test data
+            logger.info(f"Processing test payment for client {client['id']} to upgrade to {new_plan}")
+            
+            # Update subscription in database
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE clients 
+                SET subscription_level = ?, subscription_status = 'active', 
+                    subscription_start = ?, updated_at = ?
+                WHERE id = ?
+            ''', (new_plan, datetime.now().isoformat(), datetime.now().isoformat(), client['id']))
+            
+            conn.commit()
+            conn.close()
+            
+            if is_free_plan:
+                flash(f'Subscription successfully changed to {new_plan.title()}!', 'success')
+            else:
+                flash(f'Subscription successfully upgraded to {new_plan.title()}!', 'success')
+            
+            # Check if coming from scanner creation
+            scanner_created = request.form.get('scanner_created') or request.args.get('scanner_created')
+            if scanner_created:
+                # Redirect to the newly created scanner
+                return redirect(f'/scanner/{scanner_created}/embed')
+            else:
+                return redirect(url_for('client.dashboard'))
+        else:
+            # In a real implementation, integrate with Stripe/PayPal here
+            flash('Payment processing is currently in test mode. Please use test data.', 'info')
+            return redirect(url_for('client.upgrade_subscription'))
+        
+    except Exception as e:
+        logger.error(f"Error processing upgrade: {str(e)}")
+        flash('An error occurred while processing your upgrade', 'danger')
+        return redirect(url_for('client.upgrade_subscription'))
 
 @client_bp.route('/debug-dashboard')
 @client_required
