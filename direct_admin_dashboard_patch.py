@@ -3,7 +3,7 @@
 Direct patching script for admin dashboard
 
 This script directly patches the admin.py file to include the enhanced dashboard.
-It preserves all existing functionality while adding comprehensive data display.
+Run this script on render.com as part of your deployment process.
 """
 
 import os
@@ -87,9 +87,9 @@ def patch_admin_py():
 
 def main():
     """Main function"""
-    print("=" * 60)
+    print("=" * 50)
     print("Direct Patching of Admin Dashboard")
-    print("=" * 60)
+    print("=" * 50)
     
     try:
         success = patch_admin_py()
@@ -101,9 +101,6 @@ def main():
             print("  - Scanner deployment statistics")
             print("  - Lead generation data")
             print("  - System health metrics")
-            print("  - User activity tracking")
-            print("  - Real-time data visualization")
-            print("\nNo functionality has been lost in the process.")
         else:
             print("\n❌ Failed to patch admin dashboard")
     except Exception as e:
