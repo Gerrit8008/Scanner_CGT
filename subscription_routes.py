@@ -59,8 +59,7 @@ def subscription_list(user):
                 COUNT(*) as total_count,
                 SUM(CASE WHEN subscription_status = 'active' THEN 1 ELSE 0 END) as active_count,
                 SUM(CASE WHEN subscription_level = 'basic' THEN 1 ELSE 0 END) as basic_count,
-                SUM(CASE WHEN subscription_level = 'starter' THEN 1 ELSE 0 END) as starter_count,
-                SUM(CASE WHEN subscription_level = 'professional' THEN 1 ELSE 0 END) as professional_count,
+                SUM(CASE WHEN subscription_level = 'pro' THEN 1 ELSE 0 END) as pro_count,
                 SUM(CASE WHEN subscription_level = 'enterprise' THEN 1 ELSE 0 END) as enterprise_count
             FROM clients
         """)
@@ -137,10 +136,9 @@ def subscription_list(user):
         cursor.execute("""
             SELECT SUM(
                 CASE 
-                    WHEN subscription_level = 'basic' THEN 0
-                    WHEN subscription_level = 'starter' THEN 59
-                    WHEN subscription_level = 'professional' THEN 99
-                    WHEN subscription_level = 'enterprise' THEN 149
+                    WHEN subscription_level = 'basic' THEN 49
+                    WHEN subscription_level = 'pro' THEN 149
+                    WHEN subscription_level = 'enterprise' THEN 399
                     ELSE 0
                 END
             ) as monthly_revenue
@@ -283,10 +281,9 @@ def api_subscription_stats(user):
         cursor.execute("""
             SELECT SUM(
                 CASE 
-                    WHEN subscription_level = 'basic' THEN 0
-                    WHEN subscription_level = 'starter' THEN 59
-                    WHEN subscription_level = 'professional' THEN 99
-                    WHEN subscription_level = 'enterprise' THEN 149
+                    WHEN subscription_level = 'basic' THEN 49
+                    WHEN subscription_level = 'pro' THEN 149
+                    WHEN subscription_level = 'enterprise' THEN 399
                     ELSE 0
                 END
             ) as monthly_revenue

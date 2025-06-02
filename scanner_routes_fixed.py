@@ -75,20 +75,6 @@ def create_scanner_form(user):
         
         user_client = dict(user_client)
         
-        # Import subscription constants
-        from subscription_constants import get_client_scanner_limit
-        
-        # Get current scanner count
-        cursor.execute('SELECT COUNT(*) FROM scanners WHERE client_id = ? AND status != "deleted"', (user_client['id'],))
-        current_scanners = cursor.fetchone()[0]
-        
-        # Get scanner limit based on subscription level
-        scanner_limit = get_client_scanner_limit(user_client)
-        
-        # Check if client has reached their scanner limit
-        if current_scanners >= scanner_limit:
-            flash(f'Scanner limit reached ({current_scanners}/{scanner_limit}). Please upgrade your subscription to create more scanners.', 'warning')
-        
         # Get existing customizations
         cursor.execute('''
             SELECT * FROM customizations 
@@ -113,10 +99,7 @@ def create_scanner_form(user):
             'scanner_form.html',
             user=user,
             client=user_client,
-            customizations=customizations,
-            current_scanners=current_scanners,
-            scanner_limit=scanner_limit,
-            subscription_level=user_client.get('subscription_level', 'basic')
+            customizations=customizations
         )
         
     except Exception as e:
@@ -316,7 +299,7 @@ def customize_scanner(user, scanner_id):
         
         # Get scanner information with client verification
         cursor.execute('''
-            SELECT ds.*, c.business_name, c.business_domain, c.id as client_id, c.subscription_level
+            SELECT ds.*, c.business_name, c.business_domain
             FROM deployed_scanners ds
             JOIN clients c ON ds.client_id = c.id
             WHERE ds.id = ? AND c.user_id = ?
@@ -329,22 +312,6 @@ def customize_scanner(user, scanner_id):
             return redirect(url_for('client.scanners'))
         
         scanner = dict(scanner)
-        
-        # Import subscription constants
-        from subscription_constants import get_client_scanner_limit
-        
-        # Get client information for subscription checks
-        client = {
-            'id': scanner['client_id'],
-            'subscription_level': scanner['subscription_level']
-        }
-        
-        # Get current scanner count
-        cursor.execute('SELECT COUNT(*) FROM scanners WHERE client_id = ? AND status != "deleted"', (client['id'],))
-        current_scanners = cursor.fetchone()[0]
-        
-        # Get scanner limit based on subscription level
-        scanner_limit = get_client_scanner_limit(client)
         
         # Get customizations
         cursor.execute('''
@@ -362,10 +329,7 @@ def customize_scanner(user, scanner_id):
             'client/customize_scanner.html',
             user=user,
             scanner=scanner,
-            customizations=customizations,
-            current_scanners=current_scanners,
-            scanner_limit=scanner_limit,
-            subscription_level=client['subscription_level']
+            customizations=customizations
         )
         
     except Exception as e:
@@ -492,43 +456,6 @@ def delete_scanner(user, scanner_id):
 
 # Add a route for the main customize page (without scanner_id)
 @scanner_bp.route('/customize')
-@client_required
-def customize(user):
+def customize():
     """Main scanner creation/customization page"""
-    # Check for subscription limits
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Get client information
-        cursor.execute('''
-            SELECT * FROM clients 
-            WHERE user_id = ? AND active = 1
-        ''', (user['id'],))
-        user_client = cursor.fetchone()
-        
-        if not user_client:
-            flash('Client profile not found. Please complete your profile first.', 'warning')
-            return redirect(url_for('client.settings'))
-        
-        user_client = dict(user_client)
-        
-        # Import subscription constants
-        from subscription_constants import get_client_scanner_limit
-        
-        # Get current scanner count
-        cursor.execute('SELECT COUNT(*) FROM scanners WHERE client_id = ? AND status != "deleted"', (user_client['id'],))
-        current_scanners = cursor.fetchone()[0]
-        conn.close()
-        
-        # Get scanner limit based on subscription level
-        scanner_limit = get_client_scanner_limit(user_client)
-        
-        # Check if client has reached their scanner limit
-        if current_scanners >= scanner_limit:
-            flash(f'Scanner limit reached ({current_scanners}/{scanner_limit}). Please upgrade your subscription to create more scanners.', 'warning')
-    except Exception as e:
-        logging.error(f"Error checking subscription limits: {e}")
-    
-    # Redirect to the scanner creation form
     return redirect(url_for('scanner.create_scanner_form'))

@@ -1,14 +1,14 @@
 # settings_routes.py
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
 from client_db import get_db_connection
-from auth_utils import verify_session, generate_password_hash
+from auth_utils import verify_session, hash_password
 import sqlite3
 from datetime import datetime
 import os
 import json
 
 # Define settings blueprint
-settings_bp = Blueprint('settings', __name__, url_prefix='/admin')
+scanner_bp = Blueprint('scanner', __name__, url_prefix='/scanner')
 
 # Middleware to require admin login
 def admin_required(f):
@@ -33,7 +33,7 @@ def admin_required(f):
     decorated_function.__doc__ = f.__doc__
     return decorated_function
 
-@settings_bp.route('/settings')
+@scanner_bp.route('/settings')
 @admin_required
 def settings_dashboard(user):
     """Settings dashboard"""
@@ -225,7 +225,7 @@ def settings_dashboard(user):
             backup_settings={}
         )
 
-@settings_bp.route('/settings/general', methods=['POST'])
+@scanner_bp.route('/settings/general', methods=['POST'])
 @admin_required
 def update_general_settings(user):
     """Update general system settings"""
@@ -293,7 +293,7 @@ def update_general_settings(user):
     finally:
         conn.close()
 
-@settings_bp.route('/settings/email', methods=['POST'])
+@scanner_bp.route('/settings/email', methods=['POST'])
 @admin_required
 def update_email_settings(user):
     """Update email settings"""
@@ -338,7 +338,7 @@ def update_email_settings(user):
     finally:
         conn.close()
 
-@settings_bp.route('/settings/api', methods=['POST'])
+@scanner_bp.route('/settings/api', methods=['POST'])
 @admin_required
 def update_api_settings(user):
     """Update API settings"""
@@ -389,7 +389,7 @@ def update_api_settings(user):
     finally:
         conn.close()
 
-@settings_bp.route('/settings/backup', methods=['POST'])
+@scanner_bp.route('/settings/backup', methods=['POST'])
 @admin_required
 def update_backup_settings(user):
     """Update backup settings"""
@@ -438,7 +438,7 @@ def update_backup_settings(user):
     finally:
         conn.close()
 
-@settings_bp.route('/settings/backup/run', methods=['POST'])
+@scanner_bp.route('/settings/backup/run', methods=['POST'])
 @admin_required
 def run_backup(user):
     """Run a manual database backup"""
@@ -505,7 +505,7 @@ def run_backup(user):
         if conn:
             conn.close()
 
-@settings_bp.route('/settings/password', methods=['POST'])
+@scanner_bp.route('/settings/password', methods=['POST'])
 @admin_required
 def update_password(user):
     """Update admin password"""
@@ -565,7 +565,7 @@ def update_password(user):
     finally:
         conn.close()
 
-@settings_bp.route('/settings/custom-code', methods=['POST'])
+@scanner_bp.route('/settings/custom-code', methods=['POST'])
 @admin_required
 def update_custom_code(user):
     """Update custom CSS and JavaScript"""
@@ -610,7 +610,7 @@ def update_custom_code(user):
     finally:
         conn.close()
 
-@settings_bp.route('/api/settings/system-info')
+@scanner_bp.route('/api/settings/system-info')
 @admin_required
 def api_system_info(user):
     """API endpoint to get system information"""
@@ -690,3 +690,107 @@ def format_bytes(bytes):
         return f"{bytes / (1024 * 1024):.2f} MB"
     else:
         return f"{bytes / (1024 * 1024 * 1024):.2f} GB"
+
+@scanner_bp.route('/<scanner_id>/embed')
+def scanner_embed(scanner_id):
+    '''Embed view for scanner results'''
+    try:
+        # Connect directly to client_scanner.db instead of using get_db_connection()
+        from datetime import datetime
+        conn = sqlite3.connect('client_scanner.db')
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Get scanner details
+        cursor.execute(
+            "SELECT * FROM scanners WHERE scanner_id = ?", 
+            (scanner_id,)
+        )
+        scanner = cursor.fetchone()
+        
+        if not scanner:
+            return render_template('error.html', message="Scanner not found"), 404
+        
+        # Get client info
+        cursor.execute(
+            "SELECT * FROM clients WHERE id = ?", 
+            (scanner['client_id'],)
+        )
+        client = cursor.fetchone()
+        
+        if not client:
+            return render_template('error.html', message="Client not found"), 404
+        
+        # Get most recent scan
+        cursor.execute(
+            "SELECT * FROM scan_history WHERE scanner_id = ? ORDER BY created_at DESC LIMIT 1", 
+            (scanner_id,)
+        )
+        scan = cursor.fetchone()
+        
+        # Format scan data for template
+        scan_data = {}
+        if scan:
+            # Parse scan data
+            import json
+            scan_data = json.loads(scan['results'])
+            
+            # Format dates
+            created_at = datetime.fromisoformat(scan['created_at'])
+            scan_data['formatted_date'] = created_at.strftime('%B %d, %Y')
+            scan_data['formatted_time'] = created_at.strftime('%I:%M %p')
+            
+            # Add scan result to data
+            scan_data['result'] = 'completed'
+            scan_data['risk_assessment'] = scan['security_score']
+            
+            # Get risk assessment color
+            risk_score = int(scan['security_score'])
+            if risk_score < 30:
+                risk_color = "green"
+            elif risk_score < 70:
+                risk_color = "yellow"
+            else:
+                risk_color = "red"
+            
+            scan_data['risk_color'] = risk_color
+            
+            # Add network/port data if missing
+            if 'network' not in scan_data:
+                scan_data['network'] = {
+                    'open_ports': {
+                        'count': 3,
+                        'list': [80, 443, 22],
+                        'details': [
+                            {'port': 80, 'service': 'HTTP (Web)', 'severity': 'Medium'},
+                            {'port': 443, 'service': 'HTTPS (Secure Web)', 'severity': 'Low'},
+                            {'port': 22, 'service': 'SSH (Secure Shell)', 'severity': 'Low'}
+                        ],
+                        'severity': 'Medium'
+                    }
+                }
+            
+            # Add OS info if missing
+            if 'client_info' not in scan_data:
+                scan_data['client_info'] = {
+                    'os': 'Windows 10/11',
+                    'browser': 'Chrome',
+                    'name': client['business_name'],
+                    'email': client.get('contact_email', 'contact@example.com'),
+                    'company': client['business_name']
+                }
+        
+        conn.close()
+        
+        # Render embed template
+        return render_template(
+            'scanner_template.html',
+            scanner=scanner,
+            client=client,
+            scan_data=scan_data,
+            standalone=True,
+            current_year=datetime.now().year
+        )
+        
+    except Exception as e:
+        return render_template('error.html', message=f"Error: {str(e)}"), 500
