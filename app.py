@@ -85,6 +85,14 @@ try:
 except ImportError as e:
     logger.warning(f"Could not import client scanner options: {e}")
 
+# Import direct scanner (highest priority - overrides standard scanner)
+try:
+    from routes.direct_scanner import register_direct_scanner
+    register_direct_scanner(app)
+    logger.info("✅ Registered direct scanner blueprint - using simplified scanner for all embed requests")
+except ImportError as e:
+    logger.warning(f"Could not import direct scanner: {e}")
+
 # Import fixed scan routes
 try:
     from fixed_scan_routes import fixed_scan_bp
