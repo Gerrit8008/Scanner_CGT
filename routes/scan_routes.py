@@ -936,7 +936,7 @@ def api_email_report():
         return response
 
     try:
-        data = try:
+        try:
             if request.is_json:
                 data = request.get_json()
             else:
@@ -963,9 +963,6 @@ def api_email_report():
         except Exception as e:
             logging.error(f"Error handling request data: {e}")
             return jsonify({'status': 'error', 'message': 'Unable to process request data'}), 400
-            
-            # Continue with data instead of request.get_json()
-            data
         scan_id = data.get('scan_id')
         email = data.get('email')
         
