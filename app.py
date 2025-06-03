@@ -3,6 +3,8 @@ CybrScan - Security Scanner Platform
 """
 # Import risk assessment color patch
 import load_risk_patch
+from routes.scanner_routes import scanner_bp
+from reports_routes import reports_bp
 
 from flask import Flask, request, render_template, redirect, url_for, flash, jsonify, session, g, abort
 import os
@@ -30,7 +32,8 @@ app.config.from_object('config.Config')
 os.makedirs(app.instance_path, exist_ok=True)
 
 # Register Blueprints
-from auth import auth_bp
+from auth import a
+app.register_blueprint(reports_bp)uth_bp
 app.register_blueprint(auth_bp)
 
 from client import client_bp
