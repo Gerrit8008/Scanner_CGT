@@ -37,14 +37,13 @@ def apply_blank_scanner_fix(app):
         # Get scanner_uid from kwargs
         scanner_uid = kwargs.get('scanner_uid', '')
         
-        # Check if client browser reports issues
-        user_agent = request.headers.get('User-Agent', '').lower()
+        # Check if client explicitly requests help with blank screens
         has_previous_issues = 'blank_screen=true' in request.url or request.args.get('blank_screen') == 'true'
         
-        # Automatic redirect for known problematic browsers or reported issues
-        if has_previous_issues or 'msie' in user_agent or 'trident/' in user_agent:
-            logger.info(f"Redirecting scanner {scanner_uid} to minimal version (browser: {user_agent})")
-            return redirect(f'/scanner/{scanner_uid}/minimal')
+        # Only redirect if explicitly requested via parameter
+        if has_previous_issues:
+            logger.info(f"User requested help with blank screen for scanner {scanner_uid}")
+            return redirect(f'/scanner/{scanner_uid}/universal')
         
         # Process normally
         response = original_scanner_embed(*args, **kwargs)
