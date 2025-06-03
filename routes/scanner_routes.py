@@ -79,15 +79,16 @@ def scanner_deployment_info(scanner_uid):
 def scanner_embed(scanner_uid):
     """Serve the embeddable scanner HTML using main scan template"""
     try:
-        # Check if emergency mode is requested
+        # These alternative versions are only used when explicitly requested
+        # Check if minimal mode is requested
         if request.args.get('mode') == 'minimal':
-            # Redirect to minimal scanner for guaranteed functionality (no JS version)
+            # Redirect to minimal scanner (no JS version)
             logging.info(f"Using minimal scanner mode for {scanner_uid}")
             return redirect(url_for('minimal_scanner.minimal_scanner_view', scanner_uid=scanner_uid))
             
         # Check if universal mode is requested
         if request.args.get('mode') == 'universal':
-            # Redirect to universal scanner for guaranteed functionality
+            # Redirect to universal scanner
             logging.info(f"Using universal scanner mode for {scanner_uid}")
             return redirect(url_for('universal_scanner.universal_scanner_view', scanner_uid=scanner_uid))
             

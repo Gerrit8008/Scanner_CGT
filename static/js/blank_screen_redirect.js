@@ -1,8 +1,9 @@
 /**
- * Blank Screen Detection and Redirect
+ * Blank Screen Detection and Recovery Option
  * 
  * This script is loaded as early as possible and detects if the scanner 
- * is experiencing blank screen issues, then redirects to the minimal scanner.
+ * is experiencing blank screen issues, then offers a recovery option
+ * instead of automatically redirecting.
  */
 
 (function() {
@@ -14,10 +15,10 @@
     var urlParams = new URLSearchParams(window.location.search);
     var clientId = urlParams.get('client_id') || '';
     
-    // Check for immediate blank page - very early detection
+    // Check for immediate blank page - very early detection but only show recovery UI
     if (!document.body || !document.querySelector('head')) {
-        console.log('🚨 Critical: Document structure missing - redirecting immediately');
-        redirectToMinimalScanner();
+        console.log('🚨 Critical: Document structure missing - showing recovery option');
+        showRecoveryOption();
         return;
     }
     
@@ -45,9 +46,9 @@
         }
         
         if (!hasVisibleContent) {
-            console.log('🚨 No visible content detected - redirecting');
+            console.log('🚨 No visible content detected - showing recovery option');
             clearInterval(contentCheckInterval);
-            redirectToMinimalScanner();
+            showRecoveryOption();
         } else {
             console.log('✅ Content detected - scanner appears to be working');
             clearInterval(contentCheckInterval);
@@ -63,55 +64,68 @@
         var formVisible = scanForm && scanForm.offsetHeight > 0;
         
         if (!formVisible) {
-            console.log('🚨 Scan form not found or not visible after timeout - redirecting');
-            redirectToMinimalScanner();
+            console.log('🚨 Scan form not found or not visible after timeout - showing recovery option');
+            showRecoveryOption();
         }
     }, 3000);
     
-    // Global error handler
+    // Global error handler - only show recovery option
     window.addEventListener('error', function(e) {
         console.error('🚨 Global error caught:', e.message);
-        redirectToMinimalScanner();
+        showRecoveryOption();
     });
     
-    // Function to redirect to minimal scanner
-    function redirectToMinimalScanner() {
+    // Function to show recovery option without redirecting
+    function showRecoveryOption() {
         // Cancel any ongoing operations
         try {
             clearInterval(contentCheckInterval);
         } catch(e) {}
         
-        // First try showing fallback UI
+        // Only show recovery UI, don't redirect
         try {
-            if (document.body) {
-                document.body.innerHTML = `
-                    <div style="padding: 20px; text-align: center; font-family: Arial, sans-serif;">
-                        <h2 style="color: #02054c;">Scanner is loading...</h2>
-                        <p>If you are not redirected automatically, click the button below:</p>
-                        <button onclick="window.location.href='/scanner/${scannerId}/minimal'" 
-                                style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 10px;">
-                            Go to Minimal Scanner
-                        </button>
-                    </div>
-                `;
-            }
-        } catch(e) {
-            console.error('Failed to show fallback UI:', e);
-        }
-        
-        // Redirect to minimal scanner
-        try {
-            var redirectUrl = '/scanner/' + scannerId + '/minimal';
-            if (clientId) {
-                redirectUrl += '?client_id=' + clientId;
+            // Only proceed if we don't already have a recovery option showing
+            if (document.getElementById('recovery-option')) {
+                return;
             }
             
-            console.log('🔄 Redirecting to:', redirectUrl);
-            window.location.href = redirectUrl;
+            if (document.body) {
+                var recoveryDiv = document.createElement('div');
+                recoveryDiv.id = 'recovery-option';
+                recoveryDiv.style.position = 'fixed';
+                recoveryDiv.style.top = '50%';
+                recoveryDiv.style.left = '50%';
+                recoveryDiv.style.transform = 'translate(-50%, -50%)';
+                recoveryDiv.style.padding = '20px';
+                recoveryDiv.style.background = 'white';
+                recoveryDiv.style.border = '1px solid #ddd';
+                recoveryDiv.style.borderRadius = '8px';
+                recoveryDiv.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+                recoveryDiv.style.zIndex = '9999';
+                recoveryDiv.style.maxWidth = '400px';
+                recoveryDiv.style.width = '90%';
+                recoveryDiv.style.textAlign = 'center';
+                
+                recoveryDiv.innerHTML = `
+                    <h2 style="color: #02054c; margin-top: 0;">Display Issues Detected</h2>
+                    <p>The scanner may not be displaying properly. Try one of these options:</p>
+                    <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+                        <a href="/scanner/${scannerId}/universal" style="display: block; padding: 10px; background: #28a745; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">
+                            Use Universal Scanner
+                        </a>
+                        <button onclick="window.location.reload()" style="padding: 10px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                            Reload Current Scanner
+                        </button>
+                        <a href="/client/scanners" style="display: block; padding: 10px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">
+                            Return to Dashboard
+                        </a>
+                    </div>
+                `;
+                
+                document.body.appendChild(recoveryDiv);
+            }
         } catch(e) {
-            console.error('Failed to redirect:', e);
-            // Last resort - direct to minimal scanner without params
-            window.location.href = '/minimal-scanner';
+            console.error('Failed to show recovery UI:', e);
         }
     }
 })();
