@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Scanner</title>
+    <style>
+        /* Basic styling that doesn't depend on any external files */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+        .header {
+            background: #02054c;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"],
+        input[type="email"],
+        select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .btn {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            text-decoration: none;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Security Scanner</h1>
+        <p>Complete the form below to begin your security assessment</p>
+    </div>
+    
+    <div class="container">
+        <div class="card">
+            <h2>Start Your Security Scan</h2>
+            
+            <form action="/fixed_scan" method="post">
+                <!-- Hidden fields for tracking -->
+                <input type="hidden" name="scanner_id" value="{{ scanner_id }}">
+                <input type="hidden" name="client_id" value="{{ client_id }}">
+                
+                <div class="form-group">
+                    <label for="name">Full Name *</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">Email Address *</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="company">Company Name *</label>
+                    <input type="text" id="company" name="company" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="company_website">Website to Scan *</label>
+                    <input type="text" id="company_website" name="company_website" placeholder="example.com" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="industry">Industry</label>
+                    <select id="industry" name="industry">
+                        <option value="healthcare">Healthcare</option>
+                        <option value="finance">Finance & Banking</option>
+                        <option value="retail">Retail & E-commerce</option>
+                        <option value="manufacturing">Manufacturing</option>
+                        <option value="education">Education</option>
+                        <option value="government">Government</option>
+                        <option value="technology">Technology</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="privacy_consent" required>
+                        I agree to the privacy policy and consent to the scan
+                    </label>
+                </div>
+                
+                <button type="submit" class="btn">Start Security Scan</button>
+            </form>
+        </div>
+        
+        <div class="card">
+            <h3>What We Scan For</h3>
+            <ul>
+                <li><strong>Network Vulnerabilities</strong> - Open ports and misconfigured services</li>
+                <li><strong>Web Application Issues</strong> - SQL injection, XSS, and more</li>
+                <li><strong>SSL/TLS Configuration</strong> - Certificate and encryption problems</li>
+                <li><strong>Email Security</strong> - SPF, DKIM, and DMARC settings</li>
+            </ul>
+        </div>
+    </div>
+    
+    <div class="footer">
+        &copy; 2025 Security Scanner. All rights reserved.
+    </div>
+</body>
+</html>
