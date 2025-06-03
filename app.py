@@ -32,7 +32,7 @@ app.config.from_object('config.Config')
 os.makedirs(app.instance_path, exist_ok=True)
 
 # Register Blueprints
-from auth import auth_bputh_bp
+from auth import auth_bp
 app.register_blueprint(reports_bp)
 app.register_blueprint(auth_bp)
 
