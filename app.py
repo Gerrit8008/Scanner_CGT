@@ -72,12 +72,24 @@ def index():
 @app.errorhandler(400)
 def bad_request(e):
     """Handle bad request errors, including JSON parse errors"""
-    if isinstance(e, Exception) and hasattr(e, 'description') and 'Failed to decode JSON object' in str(e.description):
+    # Check if this is an AJAX request
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    accept_header = request.headers.get('Accept', '')
+    wants_json = 'application/json' in accept_header
+    
+    # Check for JSON parsing error
+    is_json_error = isinstance(e, Exception) and hasattr(e, 'description') and \
+                   ('Failed to decode JSON object' in str(e.description) or 'Not a JSON' in str(e.description))
+    
+    if is_ajax or wants_json or is_json_error:
+        # Return JSON error for AJAX requests or JSON errors
         return jsonify({
             'status': 'error',
-            'message': 'Invalid JSON format in request'
+            'message': 'Invalid JSON format in request' if is_json_error else str(e.description) if hasattr(e, 'description') else 'Bad request'
         }), 400
-    return render_template('error.html', error=e, title="Bad Request", message="The request could not be understood by the server."), 400
+    else:
+        # Return HTML for regular requests
+        return render_template('error.html', error=e, title="Bad Request", message="The request could not be understood by the server."), 400
 
 def page_not_found(e):
     return render_template('error.html', error=e, title="Page Not Found", message="The page you're looking for doesn't exist."), 404
