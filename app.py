@@ -69,6 +69,22 @@ try:
 except ImportError as e:
     logger.warning(f"Could not import universal scanner: {e}")
 
+# Import minimal scanner (JS-free version)
+try:
+    from routes.minimal_scanner import register_minimal_scanner
+    register_minimal_scanner(app)
+    logger.info("✅ Registered minimal scanner blueprint")
+except ImportError as e:
+    logger.warning(f"Could not import minimal scanner: {e}")
+
+# Import client scanner options
+try:
+    from routes.client_scanner_options import register_client_scanner_options
+    register_client_scanner_options(app)
+    logger.info("✅ Registered client scanner options blueprint")
+except ImportError as e:
+    logger.warning(f"Could not import client scanner options: {e}")
+
 # Import fixed scan routes
 try:
     from fixed_scan_routes import fixed_scan_bp
@@ -129,6 +145,14 @@ try:
     logger.info("Applied risk assessment patch to Flask routes")
 except Exception as e:
     logger.warning(f"Failed to apply risk assessment patch: {e}")
+
+# Apply blank scanner redirect fix
+try:
+    from fix_blank_scanner_redirect import apply_blank_scanner_fix
+    apply_blank_scanner_fix(app)
+    logger.info("✅ Applied blank scanner redirect fix")
+except Exception as e:
+    logger.warning(f"Failed to apply blank scanner redirect fix: {e}")
 
 if __name__ == "__main__":
     # For development
