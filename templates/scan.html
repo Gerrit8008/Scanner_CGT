@@ -1,10 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Ultra-Early Blank Screen Detection - Highest Priority -->
-    <script src="/static/js/blank_screen_redirect.js"></script>
-    <!-- Emergency Bootstrap Script - Load Early -->
-    <script src="/static/js/scanner_bootstrap.js"></script>
+    <!-- Fixed scanner script - no aggressive detection -->
+    <script src="/static/js/fixed_scanner.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {% if client_branding %}
@@ -1450,86 +1448,8 @@
         });
     </script>
 
-    <script>
-    // Global error handling to prevent blank screens
-    window.addEventListener('error', function(e) {
-        console.error('Global error caught:', e.message, e.filename, e.lineno);
-        
-        // If body is empty, show a recovery message
-        if (document.body && !document.body.innerHTML.trim()) {
-            document.body.innerHTML = `
-                <div style="padding: 20px; background: #fff; color: #333; max-width: 800px; margin: 0 auto; font-family: Arial, sans-serif;">
-                    <h1>Scanner Error</h1>
-                    <p>The scanner encountered an error. Please try refreshing the page.</p>
-                    <button onclick="window.location.reload()" style="padding: 8px 15px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px;">Refresh Page</button>
-                </div>
-            `;
-        }
-    });
-    </script>
+    <!-- Removed global error handler that was causing issues -->
     
-    <!-- Scanner Recovery Script - Only shows option, no auto-redirect -->
-    <script>
-    // Check for blank screen after page loads
-    setTimeout(function() {
-        // Check if main UI elements are visible
-        var mainElements = [
-            document.querySelector('.header'),
-            document.querySelector('.card'),
-            document.querySelector('#scanForm')
-        ];
-        
-        var visibleCount = 0;
-        mainElements.forEach(function(el) {
-            if (el && (el.offsetHeight > 0 || el.getClientRects().length > 0)) {
-                visibleCount++;
-            }
-        });
-        
-        // If issues are detected but not critical - show recovery option instead of auto-redirect
-        if (visibleCount < 2 && !window.location.href.includes('/simple') && !window.location.href.includes('/universal')) {
-            console.log('Potential display issues detected - showing recovery option');
-            
-            // Extract scanner ID from URL
-            var scannerMatch = window.location.pathname.match(/scanner\/(.*?)\/embed/);
-            var scannerId = scannerMatch ? scannerMatch[1] : '';
-            
-            // Create recovery button (only if one doesn't already exist)
-            if (!document.getElementById('recovery-option')) {
-                var recoveryDiv = document.createElement('div');
-                recoveryDiv.id = 'recovery-option';
-                recoveryDiv.style.position = 'fixed';
-                recoveryDiv.style.top = '10px';
-                recoveryDiv.style.right = '10px';
-                recoveryDiv.style.padding = '10px';
-                recoveryDiv.style.background = 'rgba(255,255,255,0.9)';
-                recoveryDiv.style.border = '1px solid #ddd';
-                recoveryDiv.style.borderRadius = '5px';
-                recoveryDiv.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
-                recoveryDiv.style.zIndex = '9999';
-                recoveryDiv.innerHTML = '<p style="margin: 0 0 10px 0; font-size: 14px;">Having display issues?</p>' +
-                    '<a href="/scanner/' + scannerId + '/universal" style="display: block; text-align: center; padding: 8px; background: #28a745; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 14px;">Switch to Simple View</a>';
-                
-                // Add to body if possible, otherwise to any available element
-                if (document.body) {
-                    document.body.appendChild(recoveryDiv);
-                } else if (document.documentElement) {
-                    document.documentElement.appendChild(recoveryDiv);
-                }
-            }
-        }
-    }, 2000);
-    </script>
-    
-    <!-- Only show the help option in a more subtle way -->
-    {% if universal_scanner_url %}
-    <div style="position: fixed; bottom: 10px; right: 10px; z-index: 1000; opacity: 0.7;" 
-         onmouseover="this.style.opacity=1" 
-         onmouseout="this.style.opacity=0.7">
-        <a href="{{ universal_scanner_url }}" class="btn btn-light btn-sm" style="box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #eee; font-size: 12px;">
-            <i class="bi bi-question-circle me-1"></i> Scanner Help
-        </a>
-    </div>
-    {% endif %}
+    <!-- No additional scanner recovery scripts needed - handled by fixed_scanner.js -->
     </body>
 </html>                
