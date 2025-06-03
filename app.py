@@ -32,8 +32,8 @@ app.config.from_object('config.Config')
 os.makedirs(app.instance_path, exist_ok=True)
 
 # Register Blueprints
-from auth import a
-app.register_blueprint(reports_bp)uth_bp
+from auth import auth_bputh_bp
+app.register_blueprint(reports_bp)
 app.register_blueprint(auth_bp)
 
 from client import client_bp
@@ -42,7 +42,7 @@ app.register_blueprint(client_bp)
 from admin import admin_bp
 app.register_blueprint(admin_bp)
 
-from scanner_routes import scanner_bp
+# Scanner blueprint is already imported at the top
 app.register_blueprint(scanner_bp)
 
 # Import fixed scan routes
