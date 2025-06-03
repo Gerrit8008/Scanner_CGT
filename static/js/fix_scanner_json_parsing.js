@@ -1,3 +1,14 @@
+
+// Global error handler to prevent script from breaking page
+window.addEventListener('error', function(e) {
+    if (e.filename && e.filename.includes('fix_scanner_json_parsing.js')) {
+        console.error('Error in JSON parsing fix script:', e.message);
+        console.error('Error location:', e.filename, 'line', e.lineno, 'column', e.colno);
+        // Don't let our utility script break the page
+        e.preventDefault();
+        return true;
+    }
+});
 /**
  * Scanner JSON Parsing Fix Script
  * 
@@ -49,6 +60,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     
     // Enhance all form submissions to better handle JSON parsing errors
+    try {
     document.querySelectorAll('form').forEach(form => {
         // Only enhance forms that submit to endpoints that might return JSON
         const formAction = form.getAttribute('action') || '';
@@ -161,6 +173,9 @@ document.addEventListener('DOMContentLoaded', function() {
             };
         }
     });
+} catch (formError) {
+    console.error('Error enhancing forms:', formError);
+}
     
     // Fix for JSON parsing in scanner API
     try {

@@ -571,3 +571,41 @@ def api_scanner_scan_status(scanner_uid, scan_id):
     except Exception as e:
         logging.error(f"Error getting scan status: {e}")
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
+
+@scanner_bp.route('/scanner/<scanner_uid>/simple')
+def scanner_simple_view(scanner_uid):
+    """Simple fallback scanner view for troubleshooting"""
+    try:
+        # Get basic scanner data
+        from client_db import get_db_connection
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, client_id FROM scanners WHERE scanner_id = ?', (scanner_uid,))
+        scanner_row = cursor.fetchone()
+        conn.close()
+        
+        if scanner_row:
+            # Convert to dict for easier access
+            if hasattr(scanner_row, 'keys'):
+                scanner_data = dict(scanner_row)
+            else:
+                scanner_data = dict(zip(['id', 'client_id'], scanner_row))
+                
+            # Render the simple template
+            return render_template('simple_scan.html', 
+                                scanner_uid=scanner_uid,
+                                scanner_id=scanner_uid,
+                                client_id=scanner_data.get('client_id'))
+        else:
+            # Scanner not found
+            return render_template('simple_scan.html', 
+                                scanner_uid=scanner_uid,
+                                scanner_id=scanner_uid)
+    
+    except Exception as e:
+        logging.error(f"Error in simple scanner view: {e}")
+        # Absolute fallback - render with minimal data
+        return render_template('simple_scan.html', 
+                            scanner_uid=scanner_uid,
+                            scanner_id=scanner_uid)
