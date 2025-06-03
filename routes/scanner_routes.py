@@ -79,6 +79,12 @@ def scanner_deployment_info(scanner_uid):
 def scanner_embed(scanner_uid):
     """Serve the embeddable scanner HTML using main scan template"""
     try:
+        # Check if force parameter is present to use simplified version
+        if request.args.get('mode') == 'universal':
+            # Redirect to universal scanner for guaranteed functionality
+            logging.info(f"Using universal scanner mode for {scanner_uid}")
+            return redirect(url_for('universal_scanner.universal_scanner_view', scanner_uid=scanner_uid))
+            
         # Get scanner data from database to provide branding
         from client_db import get_db_connection
         
@@ -136,29 +142,38 @@ def scanner_embed(scanner_uid):
             # Add client_id and scanner_id to URL parameters for tracking
             embed_url_params = f"?client_id={scanner_data.get('client_id', '')}&scanner_id={scanner_uid}"
             
+            # Add universal scanner option in the template context
+            universal_scanner_url = url_for('universal_scanner.universal_scanner_view', scanner_uid=scanner_uid)
+            
             return render_template('scan.html', 
                                  client_branding=client_branding,
                                  scanner_uid=scanner_uid,
                                  scanner_id=scanner_uid,  # Add this for the form
                                  client_id=scanner_data.get('client_id'),  # Add this for the form
                                  is_embedded=True,
-                                 embed_url_params=embed_url_params)
+                                 embed_url_params=embed_url_params,
+                                 universal_scanner_url=universal_scanner_url)
         else:
             # Fallback for scanners without branding data
+            universal_scanner_url = url_for('universal_scanner.universal_scanner_view', scanner_uid=scanner_uid)
             return render_template('scan.html', 
                                  client_branding=None,
                                  scanner_uid=scanner_uid,
                                  scanner_id=scanner_uid,  # Add this for the form
                                  is_embedded=True,
-                                 embed_url_params=f"?scanner_id={scanner_uid}")
+                                 embed_url_params=f"?scanner_id={scanner_uid}",
+                                 universal_scanner_url=universal_scanner_url)
     
     except Exception as e:
         logging.error(f"Error serving scanner embed: {e}")
-        return render_template('scan.html', 
-                             client_branding=None,
-                             scanner_uid=scanner_uid,
-                             is_embedded=True,
-                             embed_url_params=f"?scanner_id={scanner_uid}")
+        # For serious errors, redirect directly to universal scanner
+        try:
+            return redirect(url_for('universal_scanner.universal_scanner_view', scanner_uid=scanner_uid))
+        except:
+            # If even the redirect fails, render the simple scan template
+            return render_template('simple_scan.html', 
+                                scanner_uid=scanner_uid,
+                                scanner_id=scanner_uid)
 
 
 @scanner_bp.route('/scanner/<scanner_uid>/scanner-styles.css')
