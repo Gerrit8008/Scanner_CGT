@@ -21,7 +21,26 @@ logger = logging.getLogger(__name__)
 
 @scanner_bp.route('/scanner/<scanner_uid>/info')
 def scanner_deployment_info(scanner_uid):
-    """Show scanner deployment information and integration options"""
+    """    try:
+        # Ensure request is properly formatted
+        if request.is_json:
+            scan_data = request.get_json()
+        else:
+            # Handle form data or invalid content type
+            try:
+                if request.content_type and 'form' in request.content_type:
+                    scan_data = {k: v for k, v in request.form.items()}
+                else:
+                    # Try to parse body as JSON anyway
+                    scan_data = json.loads(request.data.decode('utf-8')) if request.data else {}
+            except Exception as parse_error:
+                logging.error(f"Error parsing request data: {parse_error}")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Invalid request format. Expected JSON or form data.'
+                }), 400
+                
+Show scanner deployment information and integration options"""
     try:
         # Get scanner details from database
         from scanner_db_functions import patch_client_db_scanner_functions
@@ -43,6 +62,14 @@ def scanner_deployment_info(scanner_uid):
         
         if not scanner_row:
             flash('Scanner not found', 'danger')
+    except Exception as e:
+        logging.error(f"Error processing scan request: {e}")
+        import traceback
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': f'Server error: {str(e)}'
+        }), 500
             return redirect(url_for('admin.admin_dashboard'))
         
         # Convert to dict
@@ -77,7 +104,26 @@ def scanner_deployment_info(scanner_uid):
 
 @scanner_bp.route('/scanner/<scanner_uid>/embed')
 def scanner_embed(scanner_uid):
-    """Serve the embeddable scanner HTML using main scan template"""
+    """    try:
+        # Ensure request is properly formatted
+        if request.is_json:
+            scan_data = request.get_json()
+        else:
+            # Handle form data or invalid content type
+            try:
+                if request.content_type and 'form' in request.content_type:
+                    scan_data = {k: v for k, v in request.form.items()}
+                else:
+                    # Try to parse body as JSON anyway
+                    scan_data = json.loads(request.data.decode('utf-8')) if request.data else {}
+            except Exception as parse_error:
+                logging.error(f"Error parsing request data: {parse_error}")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Invalid request format. Expected JSON or form data.'
+                }), 400
+                
+Serve the embeddable scanner HTML using main scan template"""
     try:
         # Get scanner data from database to provide branding
         from client_db import get_db_connection
@@ -135,6 +181,14 @@ def scanner_embed(scanner_uid):
             
             # Add client_id and scanner_id to URL parameters for tracking
             embed_url_params = f"?client_id={scanner_data.get('client_id', '')}&scanner_id={scanner_uid}"
+    except Exception as e:
+        logging.error(f"Error processing scan request: {e}")
+        import traceback
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': f'Server error: {str(e)}'
+        }), 500
             
             return render_template('scan.html', 
                                  client_branding=client_branding,
@@ -163,7 +217,26 @@ def scanner_embed(scanner_uid):
 
 @scanner_bp.route('/scanner/<scanner_uid>/scanner-styles.css')
 def scanner_styles(scanner_uid):
-    """Serve dynamic CSS for scanner customization"""
+    """    try:
+        # Ensure request is properly formatted
+        if request.is_json:
+            scan_data = request.get_json()
+        else:
+            # Handle form data or invalid content type
+            try:
+                if request.content_type and 'form' in request.content_type:
+                    scan_data = {k: v for k, v in request.form.items()}
+                else:
+                    # Try to parse body as JSON anyway
+                    scan_data = json.loads(request.data.decode('utf-8')) if request.data else {}
+            except Exception as parse_error:
+                logging.error(f"Error parsing request data: {parse_error}")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Invalid request format. Expected JSON or form data.'
+                }), 400
+                
+Serve dynamic CSS for scanner customization"""
     try:
         # Get scanner branding from database
         from client_db import get_db_connection
@@ -223,6 +296,14 @@ def scanner_styles(scanner_uid):
         
         response = Response(css_content, mimetype='text/css')
         response.headers['Cache-Control'] = 'public, max-age=3600'
+    except Exception as e:
+        logging.error(f"Error processing scan request: {e}")
+        import traceback
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': f'Server error: {str(e)}'
+        }), 500
         return response
         
     except Exception as e:
@@ -232,7 +313,26 @@ def scanner_styles(scanner_uid):
 
 @scanner_bp.route('/scanner/<scanner_uid>/scanner-script.js')
 def scanner_script(scanner_uid):
-    """Serve dynamic JavaScript for scanner functionality"""
+    """    try:
+        # Ensure request is properly formatted
+        if request.is_json:
+            scan_data = request.get_json()
+        else:
+            # Handle form data or invalid content type
+            try:
+                if request.content_type and 'form' in request.content_type:
+                    scan_data = {k: v for k, v in request.form.items()}
+                else:
+                    # Try to parse body as JSON anyway
+                    scan_data = json.loads(request.data.decode('utf-8')) if request.data else {}
+            except Exception as parse_error:
+                logging.error(f"Error parsing request data: {parse_error}")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Invalid request format. Expected JSON or form data.'
+                }), 400
+                
+Serve dynamic JavaScript for scanner functionality"""
     try:
         js_content = f"""
         /* Dynamic Scanner JavaScript */
@@ -247,6 +347,14 @@ def scanner_script(scanner_uid):
         
         response = Response(js_content, mimetype='application/javascript')
         response.headers['Cache-Control'] = 'public, max-age=3600'
+    except Exception as e:
+        logging.error(f"Error processing scan request: {e}")
+        import traceback
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': f'Server error: {str(e)}'
+        }), 500
         return response
         
     except Exception as e:
@@ -256,7 +364,26 @@ def scanner_script(scanner_uid):
 
 @scanner_bp.route('/scanner/<scanner_uid>/download')
 def scanner_download(scanner_uid):
-    """Provide downloadable scanner integration package"""
+    """    try:
+        # Ensure request is properly formatted
+        if request.is_json:
+            scan_data = request.get_json()
+        else:
+            # Handle form data or invalid content type
+            try:
+                if request.content_type and 'form' in request.content_type:
+                    scan_data = {k: v for k, v in request.form.items()}
+                else:
+                    # Try to parse body as JSON anyway
+                    scan_data = json.loads(request.data.decode('utf-8')) if request.data else {}
+            except Exception as parse_error:
+                logging.error(f"Error parsing request data: {parse_error}")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Invalid request format. Expected JSON or form data.'
+                }), 400
+                
+Provide downloadable scanner integration package"""
     try:
         # Get scanner details
         from client_db import get_db_connection
@@ -269,6 +396,14 @@ def scanner_download(scanner_uid):
         
         if not scanner_row:
             flash('Scanner not found', 'danger')
+    except Exception as e:
+        logging.error(f"Error processing scan request: {e}")
+        import traceback
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': f'Server error: {str(e)}'
+        }), 500
             return redirect(url_for('admin.admin_dashboard'))
         
         scanner_name = scanner_row[0]
@@ -329,13 +464,40 @@ fetch('{base_url}/api/scanner/{scanner_uid}/scan', {{
 
 @scanner_bp.route('/api/scanner/<scanner_uid>/scan', methods=['POST', 'OPTIONS'])
 def api_scanner_scan(scanner_uid):
-    """API endpoint to start a scan"""
+    """    try:
+        # Ensure request is properly formatted
+        if request.is_json:
+            scan_data = request.get_json()
+        else:
+            # Handle form data or invalid content type
+            try:
+                if request.content_type and 'form' in request.content_type:
+                    scan_data = {k: v for k, v in request.form.items()}
+                else:
+                    # Try to parse body as JSON anyway
+                    scan_data = json.loads(request.data.decode('utf-8')) if request.data else {}
+            except Exception as parse_error:
+                logging.error(f"Error parsing request data: {parse_error}")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Invalid request format. Expected JSON or form data.'
+                }), 400
+                
+API endpoint to start a scan"""
     # Handle CORS preflight request
     if request.method == 'OPTIONS':
         response = jsonify({'status': 'ok'})
         response.headers['Access-Control-Allow-Origin'] = '*'
         response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    except Exception as e:
+        logging.error(f"Error processing scan request: {e}")
+        import traceback
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': f'Server error: {str(e)}'
+        }), 500
         return response
     
     try:
@@ -496,11 +658,38 @@ def api_scanner_scan(scanner_uid):
 
 @scanner_bp.route('/api/scanner/<scanner_uid>/scan/<scan_id>')
 def api_scanner_scan_status(scanner_uid, scan_id):
-    """API endpoint to get scan status"""
+    """    try:
+        # Ensure request is properly formatted
+        if request.is_json:
+            scan_data = request.get_json()
+        else:
+            # Handle form data or invalid content type
+            try:
+                if request.content_type and 'form' in request.content_type:
+                    scan_data = {k: v for k, v in request.form.items()}
+                else:
+                    # Try to parse body as JSON anyway
+                    scan_data = json.loads(request.data.decode('utf-8')) if request.data else {}
+            except Exception as parse_error:
+                logging.error(f"Error parsing request data: {parse_error}")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Invalid request format. Expected JSON or form data.'
+                }), 400
+                
+API endpoint to get scan status"""
     try:
         # Verify API key
         auth_header = request.headers.get('Authorization', '')
         if not auth_header.startswith('Bearer '):
+    except Exception as e:
+        logging.error(f"Error processing scan request: {e}")
+        import traceback
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': f'Server error: {str(e)}'
+        }), 500
             return jsonify({'status': 'error', 'message': 'Invalid authorization header'}), 401
         
         api_key = auth_header.replace('Bearer ', '')

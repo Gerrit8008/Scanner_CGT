@@ -63,7 +63,17 @@ const saveScanner = async (formData) => {
             body: JSON.stringify(formData)
         });
         
-        return await response.json();
+        const text = await response.text();
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.error('Error parsing JSON response:', e);
+                console.error('Raw response:', text);
+                return { 
+                    success: false, 
+                    error: 'Invalid server response format. Please try again or contact support.' 
+                };
+            }
     } catch (error) {
         console.error('Error saving scanner:', error);
         throw error;
