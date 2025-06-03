@@ -61,6 +61,14 @@ try:
 except ImportError as e:
     logger.warning(f"Could not import scan endpoint fix: {e}")
 
+# Import universal scanner
+try:
+    from routes.universal_scanner import register_universal_scanner
+    register_universal_scanner(app)
+    logger.info("✅ Registered universal scanner blueprint")
+except ImportError as e:
+    logger.warning(f"Could not import universal scanner: {e}")
+
 # Import fixed scan routes
 try:
     from fixed_scan_routes import fixed_scan_bp
