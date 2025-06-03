@@ -59,24 +59,63 @@ const saveScanner = async (formData) => {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Accept': 'application/json'
             },
             body: JSON.stringify(formData)
         });
         
+        // First check if response is redirecting
+        if (response.redirected) {
+            window.location.href = response.url;
+            return { success: true };
+        }
+        
         const text = await response.text();
-            try {
-                return JSON.parse(text);
-            } catch (e) {
-                console.error('Error parsing JSON response:', e);
-                console.error('Raw response:', text);
+        try {
+            // Try to parse as JSON
+            return JSON.parse(text);
+        } catch (e) {
+            console.error('Error parsing JSON response:', e);
+            console.error('Raw response:', text);
+            
+            // Check if it's HTML
+            if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+                console.warn('Server returned HTML instead of JSON');
+                
+                // Check if it's a success page
+                if (text.includes('success') && response.status === 200) {
+                    return { 
+                        success: true,
+                        message: 'Operation completed successfully'
+                    };
+                }
+                
+                // Extract error message if possible
+                let errorMessage = 'Invalid server response format';
+                const errorMatch = text.match(/<div class="alert alert-danger">([^<]+)<\/div>/) || 
+                                   text.match(/Error: ([^<]+)/);
+                if (errorMatch && errorMatch[1]) {
+                    errorMessage = errorMatch[1].trim();
+                }
+                
                 return { 
                     success: false, 
-                    error: 'Invalid server response format. Please try again or contact support.' 
+                    error: errorMessage
                 };
             }
+            
+            // Not HTML or JSON
+            return { 
+                success: false, 
+                error: 'Invalid server response format. Please try again or contact support.' 
+            };
+        }
     } catch (error) {
         console.error('Error saving scanner:', error);
-        throw error;
+        return {
+            success: false,
+            error: error.message || 'Network error occurred'
+        };
     }
 };
 

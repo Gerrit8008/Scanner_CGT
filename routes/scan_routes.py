@@ -22,6 +22,14 @@ logger = logging.getLogger(__name__)
 @scan_bp.route('/scan', methods=['GET', 'POST'])
 def scan_page():
     """Main scan page - handles both form display and scan submission"""
+    # Handle CORS preflight request
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+        return response
+
     if request.method == 'POST':
         try:
             # Get form data including client OS info and new fields
@@ -764,6 +772,14 @@ def results_direct():
 @scan_bp.route('/quick_scan', methods=['GET', 'POST'])
 def quick_scan():
     """Quick scan with minimal input"""
+    # Handle CORS preflight request
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+        return response
+
     if request.method == 'POST':
         try:
             # Get the target domain from form
@@ -811,9 +827,17 @@ def simple_scan():
     return render_template('simple_scan.html')
 
 
-@scan_bp.route('/api/scan', methods=['POST'])
+@scan_bp.route('/api/scan', methods=['OPTIONS', 'POST'])
 def api_scan():
     """API endpoint for scan requests"""
+    # Handle CORS preflight request
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+        return response
+
     try:
         from flask import current_app
         limiter = getattr(current_app, 'limiter', None)
@@ -900,11 +924,48 @@ def api_scan():
         }), 500
 
 
-@scan_bp.route('/api/email_report', methods=['POST'])
+@scan_bp.route('/api/email_report', methods=['OPTIONS', 'POST'])
 def api_email_report():
     """API endpoint to email scan reports"""
+    # Handle CORS preflight request
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+        return response
+
     try:
-        data = request.get_json()
+        data = try:
+            if request.is_json:
+                data = request.get_json()
+            else:
+                # Try to parse body as JSON anyway or get form data
+                try:
+                    if request.content_type and 'form' in request.content_type:
+                        data = {k: v for k, v in request.form.items()}
+                    else:
+                        # Try to parse as JSON
+                        data = json.loads(request.data.decode('utf-8')) if request.data else {}
+                except Exception as parse_error:
+                    logging.error(f"Error parsing request data: {parse_error}")
+                    # Check if this is an AJAX request
+                    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+                    if is_ajax:
+                        return jsonify({
+                            'status': 'error',
+                            'message': 'Invalid request format. Expected JSON or form data.'
+                        }), 400
+                    else:
+                        return render_template('error.html', 
+                                             error="Invalid request format", 
+                                             message="The request could not be processed. Please try again.")
+        except Exception as e:
+            logging.error(f"Error handling request data: {e}")
+            return jsonify({'status': 'error', 'message': 'Unable to process request data'}), 400
+            
+            # Continue with data instead of request.get_json()
+            data
         scan_id = data.get('scan_id')
         email = data.get('email')
         
