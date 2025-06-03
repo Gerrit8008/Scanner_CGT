@@ -45,6 +45,22 @@ app.register_blueprint(admin_bp)
 # Scanner blueprint is already imported at the top
 app.register_blueprint(scanner_bp)
 
+# Import scanner debug routes
+try:
+    from routes.scanner_debug import scanner_debug_bp
+    app.register_blueprint(scanner_debug_bp)
+    logger.info("Registered scanner debug routes")
+except ImportError as e:
+    logger.warning(f"Could not import scanner debug routes: {e}")
+
+# Import scan endpoint fix
+try:
+    from routes.scan_endpoint_fix import register_scan_endpoint_fix
+    register_scan_endpoint_fix(app)
+    logger.info("Registered scan endpoint fix")
+except ImportError as e:
+    logger.warning(f"Could not import scan endpoint fix: {e}")
+
 # Import fixed scan routes
 try:
     from fixed_scan_routes import fixed_scan_bp
