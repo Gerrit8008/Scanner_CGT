@@ -154,29 +154,9 @@ try:
 except Exception as e:
     logger.warning(f"Failed to apply risk assessment patch: {e}")
 
-# Apply emergency scanner route - CRITICAL FIX FOR BLANK SCREEN
-try:
-    from emergency_scanner_route import apply_emergency_scanner_route
-    apply_emergency_scanner_route(app)
-    logger.info("✅ CRITICAL: Applied emergency scanner route - bypassing all templates")
-except Exception as e:
-    logger.warning(f"Failed to apply emergency scanner route: {e}")
+# Disabled emergency routes to prevent interference
 
-# Apply emergency scan endpoint - CRITICAL FIX FOR SCAN PROCESSING
-try:
-    from emergency_scan_endpoint import apply_emergency_scan_endpoint
-    apply_emergency_scan_endpoint(app)
-    logger.info("✅ CRITICAL: Applied emergency scan endpoint - guaranteed to work")
-except Exception as e:
-    logger.warning(f"Failed to apply emergency scan endpoint: {e}")
-
-# Apply blank scanner redirect fix (lower priority)
-try:
-    from fix_blank_scanner_redirect import apply_blank_scanner_fix
-    apply_blank_scanner_fix(app)
-    logger.info("✅ Applied blank scanner redirect fix")
-except Exception as e:
-    logger.warning(f"Failed to apply blank scanner redirect fix: {e}")
+logger.info("✅ Using standard scanner with fixes")
 
 if __name__ == "__main__":
     # For development
