@@ -68,6 +68,17 @@ def index():
 
 # Error handlers
 @app.errorhandler(404)
+
+@app.errorhandler(400)
+def bad_request(e):
+    """Handle bad request errors, including JSON parse errors"""
+    if isinstance(e, Exception) and hasattr(e, 'description') and 'Failed to decode JSON object' in str(e.description):
+        return jsonify({
+            'status': 'error',
+            'message': 'Invalid JSON format in request'
+        }), 400
+    return render_template('error.html', error=e, title="Bad Request", message="The request could not be understood by the server."), 400
+
 def page_not_found(e):
     return render_template('error.html', error=e, title="Page Not Found", message="The page you're looking for doesn't exist."), 404
 
