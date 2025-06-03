@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emergency Security Scanner</title>
+    <style>
+        /* Ultra-basic styling */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f8f9fa;
+            margin: 0;
+            padding: 0;
+        }
+        .header {
+            background: #02054c;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            width: 90%;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .form-container {
+            background: white;
+            border-radius: 5px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+        h1, h2, h3 {
+            margin-top: 0;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #777;
+            font-size: 14px;
+        }
+        .required:after {
+            content: " *";
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Emergency Security Scanner</h1>
+        <p>Complete this form to begin your security assessment</p>
+    </div>
+    
+    <div class="container">
+        <div class="form-container">
+            <h2>Start Your Security Scan</h2>
+            
+            <form id="emergencyScanForm" action="/fixed_scan" method="post">
+                <!-- Scanner ID and Client ID will be filled by script -->
+                <input type="hidden" id="scanner_id_field" name="scanner_id" value="">
+                <input type="hidden" id="client_id_field" name="client_id" value="">
+                
+                <div class="form-group">
+                    <label class="required" for="name">Full Name</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="required" for="email">Email Address</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="required" for="company">Company Name</label>
+                    <input type="text" id="company" name="company" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="required" for="company_website">Website to Scan</label>
+                    <input type="text" id="company_website" name="company_website" placeholder="example.com" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="company_size">Company Size</label>
+                    <select id="company_size" name="company_size">
+                        <option value="1-10">1-10 employees</option>
+                        <option value="11-50">11-50 employees</option>
+                        <option value="51-200">51-200 employees</option>
+                        <option value="201-500">201-500 employees</option>
+                        <option value="501+">501+ employees</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="privacy_consent" name="privacy_consent" required>
+                        I agree to the privacy policy and consent to the scan
+                    </label>
+                </div>
+                
+                <button type="submit" class="btn">Start Security Scan</button>
+            </form>
+        </div>
+        
+        <div class="form-container">
+            <h3>What We Scan For</h3>
+            <ul>
+                <li><strong>Network Security</strong> - Identifies open ports and potential security risks</li>
+                <li><strong>Web Application</strong> - Checks for common web vulnerabilities</li>
+                <li><strong>SSL/TLS Security</strong> - Verifies secure connections</li>
+                <li><strong>Email Security</strong> - Checks SPF, DKIM, and DMARC settings</li>
+            </ul>
+        </div>
+    </div>
+    
+    <div class="footer">
+        &copy; 2025 Security Scanner. All rights reserved.
+    </div>
+
+    <script>
+        // Extremely simple script to extract IDs from URL
+        document.addEventListener('DOMContentLoaded', function() {
+            // Parse URL parameters
+            var urlParams = new URLSearchParams(window.location.search);
+            var clientId = urlParams.get('client_id');
+            var scannerId = urlParams.get('scanner_id');
+            
+            // If scanner ID is not in URL params, try to extract from path
+            if (!scannerId) {
+                var scannerMatch = window.location.pathname.match(/scanner\/([a-zA-Z0-9_-]+)/);
+                if (scannerMatch && scannerMatch[1]) {
+                    scannerId = scannerMatch[1];
+                }
+            }
+            
+            // Set the form fields
+            if (clientId) {
+                document.getElementById('client_id_field').value = clientId;
+            }
+            
+            if (scannerId) {
+                document.getElementById('scanner_id_field').value = scannerId;
+            }
+            
+            // Very basic form validation
+            document.getElementById('emergencyScanForm').addEventListener('submit', function(e) {
+                var name = document.getElementById('name').value;
+                var email = document.getElementById('email').value;
+                var company = document.getElementById('company').value;
+                var website = document.getElementById('company_website').value;
+                var consent = document.getElementById('privacy_consent').checked;
+                
+                if (!name || !email || !company || !website || !consent) {
+                    alert('Please fill in all required fields and accept the privacy policy.');
+                    e.preventDefault();
+                    return false;
+                }
+                
+                return true;
+            });
+        });
+    </script>
+</body>
+</html>
