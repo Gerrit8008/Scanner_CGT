@@ -154,9 +154,16 @@ try:
 except Exception as e:
     logger.warning(f"Failed to apply risk assessment patch: {e}")
 
-# Disabled emergency routes to prevent interference
+# Use the standalone scanner as the primary solution
+try:
+    from routes.standalone_scanner import register_standalone_scanner
+    register_standalone_scanner(app)
+    logger.info("✅ CRITICAL: Registered standalone scanner - completely replacing standard scanner")
+except Exception as e:
+    logger.warning(f"Failed to register standalone scanner: {e}")
 
-logger.info("✅ Using standard scanner with fixes")
+# Disabled other emergency routes to prevent interference
+logger.info("✅ Using standalone scanner for all embed requests")
 
 if __name__ == "__main__":
     # For development
