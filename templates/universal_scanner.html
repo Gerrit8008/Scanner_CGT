@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Security Scanner</title>
+    <!-- Early load error detection -->
+    <script>
+        // Global error tracking
+        window.hasErrors = false;
+        window.addEventListener('error', function(e) {
+            console.error('Global error caught:', e.message);
+            window.hasErrors = true;
+            
+            // If body exists but is empty after error, show recovery UI
+            setTimeout(function() {
+                if (document.body && (!document.body.innerHTML.trim() || document.body.childElementCount <= 1)) {
+                    showRecoveryUI('JavaScript Error: ' + e.message);
+                }
+            }, 100);
+        });
+
+        // Function to show recovery UI when something goes wrong
+        function showRecoveryUI(reason) {
+            if (document.body) {
+                document.body.innerHTML = `
+                    <div style="padding: 20px; font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                        <h1 style="color: #02054c;">Universal Scanner</h1>
+                        <p>The scanner detected an issue: ${reason || 'Unknown error'}</p>
+                        
+                        <div id="scannerForm" style="background: #f8f8f8; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                            <h2 style="margin-top: 0; color: #02054c;">Start Your Security Scan</h2>
+                            <form id="emergencyForm" method="post" action="/fixed_scan" style="margin-top: 20px;">
+                                <input type="hidden" name="scanner_id" id="scanner_id_field">
+                                <input type="hidden" name="client_id" id="client_id_field">
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <label for="name" style="display: block; margin-bottom: 5px; font-weight: bold;">Full Name *</label>
+                                    <input type="text" id="name" name="name" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+                                </div>
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <label for="email" style="display: block; margin-bottom: 5px; font-weight: bold;">Email Address *</label>
+                                    <input type="email" id="email" name="email" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+                                </div>
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <label for="company" style="display: block; margin-bottom: 5px; font-weight: bold;">Company Name *</label>
+                                    <input type="text" id="company" name="company" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+                                </div>
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <label for="company_website" style="display: block; margin-bottom: 5px; font-weight: bold;">Website to Scan *</label>
+                                    <input type="text" id="company_website" name="company_website" placeholder="example.com" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+                                </div>
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <input type="checkbox" id="privacy-consent" name="privacy-consent" required style="margin-right: 10px;">
+                                    <label for="privacy-consent">I agree to the privacy policy and consent to the scan</label>
+                                </div>
+                                
+                                <button type="submit" style="width: 100%; padding: 12px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;">Start Security Scan</button>
+                            </form>
+                        </div>
+                        
+                        <div style="margin-top: 20px; text-align: center;">
+                            <button onclick="window.location.reload()" style="padding: 8px 15px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">Refresh Scanner</button>
+                            <a href="/client/scanners" style="padding: 8px 15px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; display: inline-block;">Return to Scanner Dashboard</a>
+                        </div>
+                    </div>
+                `;
+                
+                // Extract scanner_id and client_id from URL
+                extractAndSetIdsFromUrl();
+            }
+        }
+        
+        // Function to extract IDs from URL
+        function extractAndSetIdsFromUrl() {
+            try {
+                // Try to get from URL parameters
+                var urlParams = new URLSearchParams(window.location.search);
+                var clientId = urlParams.get('client_id');
+                var scannerId = urlParams.get('scanner_id');
+                
+                // Also try to extract scanner ID from path
+                if (!scannerId) {
+                    var scannerMatch = window.location.pathname.match(/scanner\/([a-zA-Z0-9_-]+)/);
+                    if (scannerMatch && scannerMatch[1]) {
+                        scannerId = scannerMatch[1];
+                    }
+                }
+                
+                // Set the form fields if elements exist
+                var clientIdField = document.getElementById('client_id_field');
+                var scannerIdField = document.getElementById('scanner_id_field');
+                
+                if (clientIdField && clientId) {
+                    clientIdField.value = clientId;
+                }
+                
+                if (scannerIdField && scannerId) {
+                    scannerIdField.value = scannerId;
+                }
+            } catch (e) {
+                console.error('Error extracting IDs from URL:', e);
+            }
+        }
+
+        // Check for blank page after reasonable time
+        setTimeout(function() {
+            if (document.body && (!document.body.innerHTML.trim() || document.body.childElementCount <= 1)) {
+                showRecoveryUI('Blank page detected');
+            }
+        }, 3000);
+    </script>
+    
+    <!-- Primary Styles -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #02054c;
+            --secondary-color: #35a310;
+            --button-color: #28a745;
+        }
+        
+        body {
+            font-family: 'Inter', Arial, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 30px 0;
+            border-radius: 0 0 10px 10px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .logo {
+            max-height: 60px;
+            margin-bottom: 15px;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+        
+        .card-header {
+            background-color: #f8f9fa;
+            border-bottom: 2px solid var(--primary-color);
+            padding: 15px 20px;
+        }
+        
+        .btn-primary {
+            background-color: var(--button-color);
+            border-color: var(--button-color);
+            padding: 10px 20px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            background-color: #218838;
+            border-color: #1e7e34;
+            transform: translateY(-2px);
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 20px 0;
+            color: #6c757d;
+            font-size: 14px;
+            margin-top: 30px;
+        }
+        
+        /* Form styles */
+        .form-label {
+            font-weight: 600;
+        }
+        
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.25rem rgba(2, 5, 76, 0.25);
+        }
+        
+        /* Scanner features section */
+        .feature-item {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            background-color: #f8f9fa;
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        .feature-icon {
+            color: var(--primary-color);
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        
+        /* Loading spinner */
+        .spinner-container {
+            display: none;
+            text-align: center;
+            padding: 30px;
+        }
+        
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <img src="/static/images/logo.png" alt="Security Scanner Logo" class="logo" 
+                 onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTUwIiBoZWlnaHQ9IjUwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjx0ZXh0IHg9IjEwIiB5PSIzMCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4IiBmaWxsPSJ3aGl0ZSI+Q2VudHJhbCBHZW9yZ2lhPC90ZXh0Pjx0ZXh0IHg9IjEwIiB5PSI0NSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSJ3aGl0ZSI+VGVjaG5vbG9neTwvdGV4dD48L3N2Zz4='; this.style.maxWidth='180px';">
+            <h1>Universal Security Scanner</h1>
+            <p class="mb-0">Complete the form below to begin your comprehensive security assessment</p>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="mb-0">Security Assessment Form</h2>
+                    </div>
+                    <div class="card-body">
+                        <form id="universalScanForm" method="post" action="/fixed_scan">
+                            <!-- Hidden fields for tracking -->
+                            <input type="hidden" name="scanner_id" id="scanner_id_field">
+                            <input type="hidden" name="client_id" id="client_id_field">
+                            
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Full Name *</label>
+                                <input type="text" class="form-control" id="name" name="name" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Email Address *</label>
+                                <input type="email" class="form-control" id="email" name="email" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="company" class="form-label">Company Name *</label>
+                                <input type="text" class="form-control" id="company" name="company" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="company_website" class="form-label">Website to Scan *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">https://</span>
+                                    <input type="text" class="form-control" id="company_website" name="company_website" placeholder="example.com" required>
+                                </div>
+                                <div class="form-text">This is the primary domain we'll scan for vulnerabilities.</div>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="privacy-consent" name="privacy_consent" required>
+                                    <label class="form-check-label" for="privacy-consent">
+                                        I agree to the privacy policy and consent to being contacted about my scan results.
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary btn-lg w-100">Start Security Scan</button>
+                        </form>
+                        
+                        <!-- Loading Spinner (hidden initially) -->
+                        <div class="spinner-container" id="scanSpinner">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <h4 class="mt-3">Processing Your Scan</h4>
+                            <p>Please wait while we set up your security assessment.</p>
+                            <p class="text-muted small">This should only take a few moments.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="mb-0">What We Scan</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="feature-item">
+                                    <div class="feature-icon">🔍</div>
+                                    <h4>Network Security</h4>
+                                    <p>Identifies open ports and potential network vulnerabilities that could be exploited.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-item">
+                                    <div class="feature-icon">🌐</div>
+                                    <h4>Web Application</h4>
+                                    <p>Tests for web vulnerabilities including XSS, SQL injection, and CSRF.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-item">
+                                    <div class="feature-icon">🔒</div>
+                                    <h4>SSL/TLS Security</h4>
+                                    <p>Verifies proper certificate configuration and encryption strength.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-item">
+                                    <div class="feature-icon">📧</div>
+                                    <h4>Email Security</h4>
+                                    <p>Checks SPF, DKIM, and DMARC configurations to prevent email spoofing.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <div class="container">
+            <p>&copy; 2025 Security Scanner. All rights reserved.</p>
+        </div>
+    </div>
+    
+    <script>
+        // Extract scanner_id and client_id from URL and set in form
+        document.addEventListener('DOMContentLoaded', function() {
+            // Extract and set IDs from URL
+            extractAndSetIdsFromUrl();
+            
+            // Form validation and submission
+            document.getElementById('universalScanForm').addEventListener('submit', function(e) {
+                e.preventDefault(); // Prevent default form submission
+                
+                // Validate form
+                var name = document.getElementById('name').value;
+                var email = document.getElementById('email').value;
+                var company = document.getElementById('company').value;
+                var website = document.getElementById('company_website').value;
+                var consent = document.getElementById('privacy-consent').checked;
+                
+                if (!name || !email || !company || !website || !consent) {
+                    alert('Please fill in all required fields and accept the privacy policy.');
+                    return;
+                }
+                
+                // Email validation
+                var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(email)) {
+                    alert('Please enter a valid email address.');
+                    return;
+                }
+                
+                // Show spinner
+                document.getElementById('universalScanForm').style.display = 'none';
+                document.getElementById('scanSpinner').style.display = 'block';
+                
+                // Create FormData
+                var formData = new FormData(this);
+                
+                // Add client device info
+                formData.append('client_os', navigator.platform || 'Unknown');
+                formData.append('client_browser', navigator.userAgent || 'Unknown');
+                
+                // Submit using fetch with proper error handling
+                fetch('/fixed_scan', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    // First check if the response is a redirect
+                    if (response.redirected) {
+                        window.location.href = response.url;
+                        return null;
+                    }
+                    
+                    // Get the response content type
+                    const contentType = response.headers.get('content-type');
+                    
+                    // Process based on content type
+                    if (contentType && contentType.includes('application/json')) {
+                        return response.json().then(data => {
+                            if (response.ok) {
+                                if (data.status === 'success' && data.results_url) {
+                                    window.location.href = data.results_url;
+                                } else {
+                                    window.location.href = '/results?scan_id=' + data.scan_id;
+                                }
+                            } else {
+                                throw new Error(data.message || 'Server error');
+                            }
+                        });
+                    } else {
+                        // Handle HTML response
+                        return response.text().then(html => {
+                            // Check if it contains a success indicator or results URL
+                            if (html.includes('results?scan_id=') || html.includes('/client/report')) {
+                                // Try to extract the URL
+                                const redirectMatch = html.match(/\/results\?scan_id=([a-zA-Z0-9_]+)/);
+                                const reportMatch = html.match(/\/client\/report\/([a-zA-Z0-9_]+)/);
+                                
+                                if (redirectMatch && redirectMatch[0]) {
+                                    window.location.href = redirectMatch[0];
+                                } else if (reportMatch && reportMatch[0]) {
+                                    window.location.href = reportMatch[0];
+                                } else if (response.ok) {
+                                    // If we can't find a specific URL but the response is OK, 
+                                    // create a generic success message
+                                    document.getElementById('scanSpinner').innerHTML = `
+                                        <div class="text-center py-4">
+                                            <div style="color: #28a745; font-size: 60px;">✓</div>
+                                            <h3 class="mt-3">Scan Complete!</h3>
+                                            <p>Your security assessment has been successfully completed.</p>
+                                            <div class="alert alert-success mb-4">
+                                                A detailed report has been sent to your email address.
+                                            </div>
+                                            <a href="/client/scanners" class="btn btn-primary">Return to Dashboard</a>
+                                        </div>
+                                    `;
+                                } else {
+                                    throw new Error('Unable to process scan');
+                                }
+                            } else if (html.includes('Error:') || !response.ok) {
+                                // Try to extract error message
+                                const errorMatch = html.match(/<div class="alert alert-danger">([^<]+)<\/div>/) || 
+                                                   html.match(/Error: ([^<]+)/);
+                                const errorMsg = errorMatch ? errorMatch[1].trim() : 'Server returned an error';
+                                throw new Error(errorMsg);
+                            } else {
+                                // Fallback for unknown HTML response
+                                document.getElementById('scanSpinner').innerHTML = `
+                                    <div class="text-center py-4">
+                                        <div style="color: #28a745; font-size: 60px;">✓</div>
+                                        <h3 class="mt-3">Request Received</h3>
+                                        <p>Your scan request has been submitted successfully.</p>
+                                        <div class="alert alert-info mb-4">
+                                            Please check your email for results or return to the dashboard.
+                                        </div>
+                                        <a href="/client/scanners" class="btn btn-primary">Return to Dashboard</a>
+                                    </div>
+                                `;
+                            }
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Scan submission error:', error);
+                    // Show error and reset form
+                    document.getElementById('scanSpinner').innerHTML = `
+                        <div class="alert alert-danger">
+                            <strong>Error:</strong> ${error.message || 'An error occurred while processing your scan.'}
+                        </div>
+                        <button class="btn btn-primary" onclick="window.location.reload()">Try Again</button>
+                    `;
+                });
+            });
+        });
+    </script>
+</body>
+</html>

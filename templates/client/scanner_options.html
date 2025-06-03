@@ -1,0 +1,207 @@
+{% extends 'client/client-dashboard.html' %}
+
+{% block title %}Scanner Options{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4 mb-4">Scanner Options</h1>
+    
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle me-2"></i>
+        <strong>Scanner Options:</strong> Choose the most reliable scanner version that works best for your needs.
+    </div>
+    
+    <div class="row">
+        <div class="col-xl-12">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="bi bi-shield me-1"></i>
+                    Available Scanner Versions
+                </div>
+                <div class="card-body">
+                    {% if scanners %}
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Scanner Name</th>
+                                        <th>Standard Version</th>
+                                        <th>Universal Version</th>
+                                        <th>Minimal Version</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for scanner in scanners %}
+                                    <tr>
+                                        <td>{{ scanner.name }}</td>
+                                        <td>
+                                            <a href="/scanner/{{ scanner.scanner_id }}/embed" class="btn btn-primary btn-sm" target="_blank">
+                                                <i class="bi bi-globe"></i> Standard
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <a href="/scanner/{{ scanner.scanner_id }}/universal" class="btn btn-success btn-sm" target="_blank">
+                                                <i class="bi bi-shield-check"></i> Universal
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <a href="/scanner/{{ scanner.scanner_id }}/minimal" class="btn btn-danger btn-sm" target="_blank">
+                                                <i class="bi bi-lightning"></i> Minimal
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="row mt-4">
+                            <div class="col-md-4">
+                                <div class="card h-100">
+                                    <div class="card-header bg-primary text-white">
+                                        Standard Scanner
+                                    </div>
+                                    <div class="card-body">
+                                        <h5 class="card-title">Full-Featured</h5>
+                                        <p class="card-text">Complete scanner with all features, branding, and customization options.</p>
+                                        <ul class="list-group list-group-flush mb-3">
+                                            <li class="list-group-item">✅ Custom branding</li>
+                                            <li class="list-group-item">✅ Multi-step form</li>
+                                            <li class="list-group-item">✅ Progress indicators</li>
+                                            <li class="list-group-item">❌ May have blank screen issues</li>
+                                        </ul>
+                                        <p class="text-muted small">Best for most users with modern browsers.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="card h-100">
+                                    <div class="card-header bg-success text-white">
+                                        Universal Scanner
+                                    </div>
+                                    <div class="card-body">
+                                        <h5 class="card-title">Self-Contained</h5>
+                                        <p class="card-text">Reliable scanner with built-in error recovery and simplified interface.</p>
+                                        <ul class="list-group list-group-flush mb-3">
+                                            <li class="list-group-item">✅ Error recovery</li>
+                                            <li class="list-group-item">✅ Works in most browsers</li>
+                                            <li class="list-group-item">✅ Basic branding</li>
+                                            <li class="list-group-item">❌ Limited animations</li>
+                                        </ul>
+                                        <p class="text-muted small">Best for users experiencing occasional issues.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="card h-100">
+                                    <div class="card-header bg-danger text-white">
+                                        Minimal Scanner
+                                    </div>
+                                    <div class="card-body">
+                                        <h5 class="card-title">Ultra-Reliable</h5>
+                                        <p class="card-text">No-frills scanner with no JavaScript dependencies, guaranteed to work.</p>
+                                        <ul class="list-group list-group-flush mb-3">
+                                            <li class="list-group-item">✅ Works in all browsers</li>
+                                            <li class="list-group-item">✅ No JavaScript required</li>
+                                            <li class="list-group-item">✅ Fastest loading</li>
+                                            <li class="list-group-item">❌ Basic appearance</li>
+                                        </ul>
+                                        <p class="text-muted small">Best for users with persistent blank screen issues.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            No scanners found for this client.
+                        </div>
+                        <a href="{{ url_for('client.scanner_create') }}" class="btn btn-primary">
+                            <i class="bi bi-plus-circle me-1"></i> Create Scanner
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Embed code examples -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="bi bi-code-slash me-1"></i>
+                    Embed Code Examples
+                </div>
+                <div class="card-body">
+                    <ul class="nav nav-tabs" id="embedTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="standard-tab" data-bs-toggle="tab" data-bs-target="#standard" type="button" role="tab" aria-controls="standard" aria-selected="true">Standard</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="universal-tab" data-bs-toggle="tab" data-bs-target="#universal" type="button" role="tab" aria-controls="universal" aria-selected="false">Universal</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="minimal-tab" data-bs-toggle="tab" data-bs-target="#minimal" type="button" role="tab" aria-controls="minimal" aria-selected="false">Minimal</button>
+                        </li>
+                    </ul>
+                    <div class="tab-content" id="embedTabsContent">
+                        <div class="tab-pane fade show active p-3" id="standard" role="tabpanel" aria-labelledby="standard-tab">
+                            <h5>Standard Scanner Embed Code</h5>
+                            {% if scanners and scanners|length > 0 %}
+                            <pre class="bg-light p-3 mt-3"><code>&lt;iframe src="{{ request.host_url }}scanner/{{ scanners[0].scanner_id }}/embed" 
+        width="100%" 
+        height="600" 
+        frameborder="0"&gt;&lt;/iframe&gt;</code></pre>
+                            {% endif %}
+                        </div>
+                        <div class="tab-pane fade p-3" id="universal" role="tabpanel" aria-labelledby="universal-tab">
+                            <h5>Universal Scanner Embed Code</h5>
+                            {% if scanners and scanners|length > 0 %}
+                            <pre class="bg-light p-3 mt-3"><code>&lt;iframe src="{{ request.host_url }}scanner/{{ scanners[0].scanner_id }}/universal" 
+        width="100%" 
+        height="600" 
+        frameborder="0"&gt;&lt;/iframe&gt;</code></pre>
+                            {% endif %}
+                        </div>
+                        <div class="tab-pane fade p-3" id="minimal" role="tabpanel" aria-labelledby="minimal-tab">
+                            <h5>Minimal Scanner Embed Code</h5>
+                            {% if scanners and scanners|length > 0 %}
+                            <pre class="bg-light p-3 mt-3"><code>&lt;iframe src="{{ request.host_url }}scanner/{{ scanners[0].scanner_id }}/minimal" 
+        width="100%" 
+        height="600" 
+        frameborder="0"&gt;&lt;/iframe&gt;</code></pre>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Troubleshooting -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="bi bi-wrench me-1"></i>
+                    Troubleshooting
+                </div>
+                <div class="card-body">
+                    <h5>If your scanner displays a blank screen:</h5>
+                    <ol>
+                        <li>Try the Universal Scanner first</li>
+                        <li>If issues persist, use the Minimal Scanner</li>
+                        <li>Clear your browser cache and cookies</li>
+                        <li>Try a different browser</li>
+                        <li>Contact support if problems continue</li>
+                    </ol>
+                    
+                    <h5 class="mt-4">Direct Emergency Links:</h5>
+                    <p>Add these parameters to any scanner URL:</p>
+                    <ul>
+                        <li><code>?emergency=true</code> - Forces minimal scanner mode</li>
+                        <li><code>?mode=universal</code> - Uses the universal scanner</li>
+                        <li><code>?mode=minimal</code> - Uses the minimal scanner</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

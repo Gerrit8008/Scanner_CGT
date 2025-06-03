@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- Ultra-Early Blank Screen Detection - Highest Priority -->
+    <script src="/static/js/blank_screen_redirect.js"></script>
     <!-- Emergency Bootstrap Script - Load Early -->
     <script src="/static/js/scanner_bootstrap.js"></script>
     <meta charset="UTF-8">
@@ -1485,15 +1487,24 @@
         });
         
         // If most elements are not visible
-        if (visibleCount < 2 && !window.location.href.includes('/simple')) {
-            console.log('Blank screen detected - redirecting to simple view');
+        if (visibleCount < 2 && !window.location.href.includes('/simple') && !window.location.href.includes('/universal')) {
+            console.log('Blank screen detected - redirecting to universal scanner');
             // Extract scanner ID from URL
             var scannerMatch = window.location.pathname.match(/scanner\/(.*?)\/embed/);
             if (scannerMatch && scannerMatch[1]) {
-                window.location.href = '/scanner/' + scannerMatch[1] + '/simple';
+                window.location.href = '/scanner/' + scannerMatch[1] + '/universal';
             }
         }
     }, 2000);
     </script>
+    
+    <!-- Universal Scanner Option -->
+    {% if universal_scanner_url %}
+    <div style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;">
+        <a href="{{ universal_scanner_url }}" class="btn btn-light btn-sm" style="box-shadow: 0 2px 5px rgba(0,0,0,0.2); border: 1px solid #ddd;">
+            <i class="bi bi-shield-check me-1"></i> Universal Scanner Mode
+        </a>
+    </div>
+    {% endif %}
     </body>
 </html>                
